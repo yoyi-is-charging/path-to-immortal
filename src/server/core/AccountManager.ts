@@ -23,6 +23,7 @@ export class AccountManager {
             online: false,
             metadata: {},
             config: {
+                metadata: { channelUrl: process.env.CHANNEL_URL! },
                 meditation: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, count: 1, tantric: { enabled: false, targets: [], autoMeditation: false } },
                 garden: { enabled: false, seedType: '仙露草种子', ripen: { enabled: false, seedType: '灵芝种子' } },
                 bounty: { enabled: false, bountyTypes: ['帮扶凡间疾苦', '保护我方大殿', '保护我方药园', '解救被困修士', '铲除山贼保护城镇', '度化恶灵', '铲除妖兽', '保护我方岩矿', '抵御外族入侵', '铲除邪修', '游历古战场', '游历五龙池'] },
