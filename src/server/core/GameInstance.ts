@@ -1,0 +1,368 @@
+// src/server/core/GameInstance.ts
+import { Browser, BrowserContext, chromium, Page, Response } from 'playwright-core';
+import { CommandScheduler } from './CommandScheduler';
+import { Status, MessageBody, Command, Account } from '../types';
+import { logger } from '../../utils/logger';
+import { Request } from 'playwright-core';
+import { EventBus } from './EventBus';
+import { AccountManager } from './AccountManager';
+
+export class GameInstance {
+
+    public tinyID: string | null = null;
+    private lastMessageIndex: number = 0;
+    static readonly fetchInterval: number = 1000;
+    static readonly fetchThreshold: number = 5000;
+    static readonly sessionExpirationThreshold: number = 12 * 60 * 60 * 1000;
+    private isFetching: boolean = false;
+    private fetchPaused: boolean = false;
+
+    private browser: Browser | null = null;
+    private context: BrowserContext | null = null;
+    private page: Page | null = null;
+    private baseUrl: string;
+    private loginUrl: string;
+    private channelUrl: string;
+    private sendParams: { input: string; init: RequestInit } = { input: '', init: {} };
+    private receiveParams: { input: string; init: RequestInit } = { input: '', init: {} };
+    public scheduler: CommandScheduler | null = null;
+    private fetchTimeout: NodeJS.Timeout | null = null;
+    private reloginTimeout: NodeJS.Timeout | null = null;
+
+
+    constructor(
+        public readonly account: Account,
+    ) {
+        this.baseUrl = "https://pd.qq.com";
+        this.loginUrl = `https://xui.ptlogin2.qq.com/cgi-bin/xlogin?appid=1600001587&s_url=${encodeURIComponent(this.baseUrl)}`;
+        this.channelUrl = process.env.CHANNEL_URL!;
+        const lastUpdated = this.account.metadata.lastUpdateTime;
+        const lastUpdatedDate = lastUpdated ? new Date(lastUpdated).setHours(0, 0, 0, 0) : null;
+        const today = new Date().setHours(0, 0, 0, 0);
+        if (lastUpdatedDate !== today) this.resetStatus();
+    }
+
+
+    public async register() {
+        this.browser = await chromium.launch({ headless: true });
+        this.context = await this.browser.newContext();
+        this.page = await this.context.newPage();
+        const session = this.account.session;
+        if (!session)
+            await this.updateSession();
+        else
+            await this.init();
+    }
+
+    public async close() {
+        if (this.reloginTimeout) {
+            clearTimeout(this.reloginTimeout);
+            this.reloginTimeout = null;
+        }
+        if (this.fetchTimeout) {
+            clearTimeout(this.fetchTimeout);
+            this.fetchTimeout = null;
+        }
+        await this.browser!.close();
+        this.account.online = false;
+    }
+
+    public async updateSession() {
+        this.account.online = false;
+        await new Promise<void>((resolve) => {
+            const checkPendingCommands = () => (this.scheduler?.isPending()) ? setTimeout(checkPendingCommands, 100) : resolve();
+            checkPendingCommands();
+        });
+        logger.info(`Navigating to login page for accountId: ${this.account.id}`);
+        await this.page!.goto(this.loginUrl, { waitUntil: 'domcontentloaded' });
+        if (!await this.linkLogin() && !await this.credentialLogin() && !await this.qrLogin())
+            throw new Error(`Login failed for accountId: ${this.account.id}`);
+        await AccountManager.persist();
+        await this.init();
+        EventBus.emit('sessionUpdated', { accountId: this.account.id, success: true });
+    }
+
+    private async linkLogin() {
+        try {
+            const loginLink = await this.page!.waitForSelector(`a[uin="${this.account.id}"]`, { timeout: 5000 });
+            await loginLink!.click();
+            await this.page!.waitForURL(this.baseUrl, { waitUntil: 'domcontentloaded' });
+            this.account.session = await this.context!.cookies();
+            return true;
+        } catch (error) {
+            logger.info(`Link login failed for accountId: ${this.account.id}`);
+            return false;
+        }
+    }
+
+    private async credentialLogin() {
+        try {
+            await this.page!.click('#switcher_plogin');
+            await this.page!.waitForSelector('#u');
+            await this.page!.waitForSelector('#p');
+            const id = this.account.id;
+            const password = AccountManager.decryptPassword(this.account.encryptedPassword);
+            if (password === undefined)
+                return false;
+            await this.page!.fill('#u', id);
+            await this.page!.fill('#p', password);
+            await this.page!.click('#login_button');
+            await this.page!.waitForURL(this.baseUrl, { timeout: 5000, waitUntil: 'commit' });
+            this.account.session = await this.context!.cookies();
+            return true;
+        } catch (error) {
+            logger.error(`Credential login failed for accountId: ${this.account.id}`);
+            return false;
+        }
+    }
+
+    private async qrLogin() {
+        try {
+            const captureQRCode = async (response: Response) => {
+                const url = response.url();
+                if (url.includes('ptqrshow')) {
+                    EventBus.emit('qrcodeUpdated', {
+                        base64: `data:image/png;base64,${Buffer.from(await response.body()).toString('base64')}`
+                    });
+                }
+            };
+            this.page?.on('response', captureQRCode);
+            await this.page!.click('#switcher_qlogin');
+            await this.page?.waitForURL(this.baseUrl, { timeout: 60000, waitUntil: 'load' });
+            this.account.session = await this.context!.cookies();
+            this.page?.off('response', captureQRCode);
+            return true;
+        } catch (error) {
+            logger.error(`QR login failed for accountId: ${this.account.id}`, error);
+            return false;
+        }
+    }
+
+    public async init() {
+        await this.context!.addCookies(this.account.session!);
+        await this.page!.goto(this.channelUrl, { waitUntil: 'domcontentloaded' });
+
+        let sendParamsCaptured = false;
+        let receiveParamsCaptured = false;
+
+        const filterInvalidHeaders = (headers: Record<string, string>) => {
+            const forbiddenHeaders = ['accept-encoding', 'content-length', 'origin', 'user-agent'];
+            return Object.fromEntries(
+                Object.entries(headers)
+                    .filter(([key]) =>
+                        !forbiddenHeaders.includes(key.toLowerCase()) &&
+                        !key.startsWith(':')
+                    )
+            );
+        }
+
+        const captureParamsHandler = async (request: Request) => {
+            const url = request.url();
+            if (url.includes('sendmsg/HandleProcess')) {
+                const body = JSON.parse(request.postData() || '{}');
+                if (body.msg?.head?.routing_head?.from_tinyid === undefined)
+                    return;
+                this.sendParams = {
+                    input: url,
+                    init: {
+                        method: request.method(),
+                        headers: filterInvalidHeaders(await request.allHeaders()),
+                        body: request.postData()
+                    }
+                }
+                this.tinyID = body.msg.head.routing_head.from_tinyid;
+                const bytes_pb_reserve = body.msg.body.rich_text.elems.find((elem: any) => elem.text.bytes_pb_reserve !== null)?.text.bytes_pb_reserve;
+                if (this.account.status.personalInfo?.bytes_pb_reserve === undefined && bytes_pb_reserve !== undefined)
+                    this.updateStatus({ personalInfo: { bytes_pb_reserve } });
+                if (this.account.status.personalInfo?.bytes_pb_reserve === undefined) {
+                    await locator.evaluate((el: HTMLElement, content: string) => el.innerHTML = content, `<span data-nick-name="又一充电中" data-tiny-id="${this.tinyID}" data-at-type="1">@又一充电中</span>`);
+                    await sendButton.click();
+                } else
+                    sendParamsCaptured = true;
+            }
+            if (url.includes('HandleProcess?msg=1&polling')) {
+                this.receiveParams = {
+                    input: url,
+                    init: {
+                        method: request.method(),
+                        headers: filterInvalidHeaders(await request.allHeaders()),
+                        body: request.postData()
+                    }
+                }
+                receiveParamsCaptured = true;
+            }
+            if (sendParamsCaptured && receiveParamsCaptured) {
+                logger.info(`Send and receive parameters captured for accountId: ${this.account.id}`);
+                this.page!.off('request', captureParamsHandler);
+            }
+        }
+
+        const locator = await this.page!.waitForSelector('[contenteditable="true"]');
+        await locator.fill('start');
+        const sendButton = await this.page!.waitForSelector('.g-button--primary.g-button--small.btn');
+        this.page!.on('request', captureParamsHandler);
+        await sendButton.click();
+        await new Promise<void>((resolve) => {
+            const checkParamsCaptured = () => (sendParamsCaptured && receiveParamsCaptured) ? resolve() : setTimeout(checkParamsCaptured, 100);
+            checkParamsCaptured();
+        });
+        this.account.online = true;
+        await this.scheduleRelogin();
+        this.scheduler = new CommandScheduler(this);
+        this.scheduler.init();
+    }
+
+    public async scheduleRelogin() {
+        const timestamp = this.getSessionExpirationTime() - GameInstance.sessionExpirationThreshold;
+        this.reloginTimeout = setTimeout(async () => {
+            try {
+                await this.updateSession();
+            } catch {
+                EventBus.emit('sessionUpdated', { accountId: this.account.id, success: false });
+            }
+        }, timestamp - Date.now());
+        EventBus.emit('sessionUpdateScheduled', { accountId: this.account.id, timestamp });
+    }
+
+    private getSessionExpirationTime(): number {
+        return Math.min(...this.account.session!.filter(cookie => cookie.domain === '.pd.qq.com' && cookie.expires !== -1).map(cookie => cookie.expires * 1000));
+    }
+
+    public async sendCommand(message: MessageBody) {
+        await new Promise<void>((resolve) => {
+            const validate = () => (this.account.online && !this.fetchPaused) ? resolve() : setTimeout(validate, 100);
+            validate();
+        });
+        const body = JSON.parse(typeof this.sendParams.init?.body === 'string' ? this.sendParams.init.body : '{}');
+        body.msg.head.content_head.random = Date.now() + this.scheduler!.commandCount;
+        const head: MessageBody = [{ str: '@唐诗修仙', bytes_pb_reserve: 'GAIovIWNpPKAgIAC' }];
+        body.msg.body.rich_text.elems = head.concat(message).map((elem, index) => ({
+            text: {
+                str: Buffer.from(index === 0 ? elem.str : ' ' + elem.str, 'utf-8').toString('base64'),
+                bytes_pb_reserve: elem.bytes_pb_reserve
+            }
+        }));
+        return fetch(this.sendParams.input, {
+            ...this.sendParams.init,
+            body: JSON.stringify(body),
+            credentials: 'include',
+        }).then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
+            .catch((error) => {
+                logger.error(`Error sending message: ${error.message}`);
+                throw error;
+            });
+    }
+
+    public async fetchResponses() {
+        if (this.isFetching)
+            return;
+        this.isFetching = true;
+        try {
+            const response = await fetch(this.receiveParams.input, {
+                ...this.receiveParams.init,
+                credentials: 'include',
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.data.channel_msg_rsp === null)
+                    return;
+                const msg = data.data.channel_msg_rsp.rpt_channel_msg[0];
+                const begIndex = parseInt(msg.rsp_begin_seq);
+                const endIndex = parseInt(msg.rsp_end_seq);
+                if (begIndex === 0 && endIndex === 0)
+                    return;
+                for (let i = begIndex; i <= endIndex; ++i) {
+                    const content = Buffer.from(msg.rpt_msgs[endIndex - i], 'base64').toString('utf-8').normalize("NFKC");
+                    const response = this.validateAndParseResponse(content);
+                    if (response && i > this.lastMessageIndex)
+                        this.scheduler!.processResponse(response), this.lastMessageIndex = i;
+                }
+                this.setFetchParams(endIndex, endIndex + 30);
+                return;
+            }
+        } catch (error) {
+            logger.error(`Error fetching responses: ${(error as Error).message}`);
+        } finally {
+            this.isFetching = false;
+            this.scheduleFetch();
+        }
+    }
+    private setFetchParams(begIndex: number, endIndex: number) {
+        const body = JSON.parse(this.receiveParams.init.body as string);
+        body.get_channel_msg_req.rpt_channel_params[0].begin_seq = begIndex.toString();
+        body.get_channel_msg_req.rpt_channel_params[0].end_seq = endIndex.toString();
+        body.msg_box_get_req.cookie = "";
+        this.receiveParams.init.body = JSON.stringify(body);
+        this.fetchPaused = (begIndex === 0 && endIndex === 0);
+    }
+
+    public scheduleFetch() {
+        if (this.fetchTimeout)
+            clearTimeout(this.fetchTimeout);
+        let timestamp = Date.now() + GameInstance.fetchInterval;
+        if (!this.scheduler!.isPending() && this.scheduler!.isScheduled() && this.scheduler!.getNextScheduledCommand().date?.getTime()! - Date.now() > GameInstance.fetchThreshold) {
+            this.setFetchParams(0, 0);
+            timestamp = this.scheduler!.getNextScheduledCommand().date?.getTime()! - GameInstance.fetchThreshold;
+        }
+        this.fetchTimeout = setTimeout(() => this.fetchResponses(), timestamp - Date.now());
+        EventBus.emit('fetchScheduled', { accountId: this.account.id, timestamp });
+    }
+
+    private validateAndParseResponse(content: string): string | null {
+        if (!content.includes(this.tinyID!))
+            return null;
+        return content.match(new RegExp(`(?<=${this.tinyID!}\\))[\\s\\S]*`))?.[0] || null;
+    }
+
+    public updateStatus(status: Partial<Status>) {
+        AccountManager.patchStatus(this.account.id, status);
+    }
+
+    public async scheduleCommand(command: Command, delay: number = 0) {
+        this.scheduler!.scheduleCommand(command, delay);
+    }
+
+    public async waitForLevelUpdate() {
+        this.account.status.personalInfo!.level = undefined;
+        this.scheduleCommand({ type: 'personalInfo', body: '我的境界' });
+        await new Promise<void>((resolve) => {
+            const checkLevelUpdate = () => (this.account.status.personalInfo?.level !== undefined) ? resolve() : setTimeout(checkLevelUpdate, 100);
+            checkLevelUpdate();
+        });
+    }
+
+    public resetStatus() {
+        this.updateStatus({
+            meditation: { exhausted: false },
+            garden: { ripen: { ripeCount: 30 } },
+            secretRealm: { inProgress: false, isFinished: false },
+            zoo: { inProgress: false, isFinished: false },
+            dreamland: { inProgress: false, isFinished: false },
+            fishing: { inProgress: false, finishedCount: 0 },
+            wooding: { inProgress: false, finishedCount: 0 },
+            hell: { inProgress: false, isFinished: false },
+            fortune: { occupation: false, realmDraw: false, levelDraw: false, realmWar: false, levelWar: false, sectWar: false },
+            misc: {
+                signIn: false,
+                sendEnergy: false,
+                receiveEnergy: false,
+                abode: { inProgress: false, isFinished: false },
+                transmission: false,
+                receiveTransmission: false,
+                receiveTaskReward: false,
+                receiveBlessing: false,
+                kill: { count: 0 },
+                challenge: { count: 0 },
+                forge: { count: 0, currentType: undefined },
+                tower: { count: 0 },
+                worship: { count: 0 },
+                fight: { randomCount: 0, masterCount: 0, challengeSectCount: 0, sectCount: 0 },
+                sect: { signIn: false, task: { inProgress: false, isFinished: false } },
+                battleSignUp: { inProgress: false, isFinished: false },
+            }
+        })
+    }
+}

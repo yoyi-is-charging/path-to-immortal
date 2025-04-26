@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户详情</title>
+
+    <script type="importmap">
+        { "imports": { "tslib": "/node_modules/tslib/tslib.es6.js", "lit/": "/node_modules/lit/", "lit": "/node_modules/lit/index.js", "@lit/reactive-element": "/node_modules/@lit/reactive-element/reactive-element.js", "@lit/reactive-element/": "/node_modules/@lit/reactive-element/", "lit-html": "/node_modules/lit-html/lit-html.js", "lit-html/": "/node_modules/lit-html/", "lit-element/": "/node_modules/lit-element/" } }
+    </script>
+
+    <script type="module" src="/components/account-status.js"></script>
+    <script type="module" src="/node_modules/@material/web/all.js"></script>
+    <style>
+        :root {
+            --input-height: 56px;
+            --input-padding: 12px;
+            --input-border-radius: 16px;
+            --footer-padding: 8px;
+            --content-padding-bottom: calc((var(--input-height) + 2 * var(--input-padding) + 2 * var(--footer-padding)));
+        }
+
+        body {
+            visibility: hidden;
+            display: flex;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+        }
+
+        /* footer */
+
+        #status-list {
+            flex: 1;
+            overflow-y: auto;
+            /* margin-bottom: var(--content-padding-bottom); */
+        }
+
+        #status-list::-webkit-scrollbar {
+            display: none;
+        }
+
+        .console {
+            /* position: fixed; */
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            padding: var(--footer-padding);
+            box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.2);
+            background: white;
+        }
+
+        .console-input {
+            width: 100%;
+            padding: var(--input-padding) 16px;
+        }
+
+        .send-button {
+            margin-left: 8px;
+            /* height: var(--input-height); */
+            margin: var(--input-padding);
+        }
+
+        /* md-fab {
+            position: fixed !important;
+            bottom: 16px !important;
+            right: 16px !important;
+            z-index: 1000;
+        } */
+
+        .section-header {
+            font-weight: bold;
+            padding: 16px 0px;
+        }
+
+        md-list-item>label {
+            display: flex;
+            align-items: center;
+        }
+
+        md-list-item>label>.field {
+            margin-left: auto;
+        }
+
+        .field {
+            min-height: 56px;
+            min-width: none;
+            max-width: 40% !important;
+            align-items: center;
+        }
+
+        md-divider {
+            margin: 0 auto;
+            padding: 0 16px;
+        }
+
+        md-list md-list {
+            border-radius: 12px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+        }
+    </style>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => document.body.style.visibility = 'visible');
+    </script>
+</head>
+
+<body>
+    <md-list class="status-list">
+        <md-list-item>
+            <div slot="headline">
+                <h2 class="headline">
+                    账户状态
+                    <small class="stats-text" id="stats-text"></small>
+                </h2>
+                <small class="stats-text" id="account-id"></small>
+            </div>
+        </md-list-item>
+    </md-list>
+
+    <div id="status-list"></div>
+
+    <div class="console">
+        <md-outlined-text-field class="console-input" label="控制台" prefix-text=">"></md-outlined-text-field>
+        <md-filled-button class="send-button" disabled>发送</md-filled-button>
+    </div>
+</body>
+
+</html>

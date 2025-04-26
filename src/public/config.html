@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账户设置</title>
+
+    <script type="importmap">
+        { "imports": { "tslib": "/node_modules/tslib/tslib.es6.js", "lit/": "/node_modules/lit/", "lit": "/node_modules/lit/index.js", "@lit/reactive-element": "/node_modules/@lit/reactive-element/reactive-element.js", "@lit/reactive-element/": "/node_modules/@lit/reactive-element/", "lit-html": "/node_modules/lit-html/lit-html.js", "lit-html/": "/node_modules/lit-html/", "lit-element/": "/node_modules/lit-element/" } }
+    </script>
+
+    <script type="module" src="/components/account-config.js"></script>
+    <script type="module" src="/node_modules/@material/web/all.js"></script>
+    <style>
+        :root {
+            --input-height: 56px;
+            --input-padding: 12px;
+            --input-border-radius: 16px;
+            --footer-padding: 8px;
+            --content-padding-bottom: calc((var(--input-height) + 2 * var(--input-padding) + 2 * var(--footer-padding)));
+            --md-list-item-leading-space: 16px;
+            --md-list-item-trailing-space: 16px;
+            --md-list-item-top-space: 12px;
+            --md-list-item-bottom-space: 12px;
+        }
+
+        body {
+            visibility: hidden;
+        }
+
+        .section-header {
+            font-weight: bold;
+            padding: var(--md-list-item-top-space) var(--md-list-item-trailing-space) calc(2 * var(--md-list-item-bottom-space)) var(--md-list-item-leading-space);
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+        }
+
+        .field {
+            margin-left: auto;
+            min-height: 56px;
+            max-width: 50%;
+            align-items: center;
+        }
+
+        .hours, .minutes, .seconds {
+            max-width: 64px;
+            flex-grow: 0;
+        }
+
+        md-divider {
+            margin: 0 auto;
+            padding: 0 var(--md-list-item-leading-space) 0 var(--md-list-item-trailing-space);
+        }
+
+        md-list md-list {
+            border-radius: 12px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+        }
+
+    </style>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => document.body.style.visibility = 'visible');
+    </script>
+</head>
+
+<body>
+    <md-list class="config-list">
+        <md-list-item>
+            <div slot="headline">
+                <h2 class="headline">
+                    账户设置
+                    <small class="stats-text" id="stats-text"></small>
+                </h2>
+                <small class="stats-text" id="account-id"></small>
+            </div>
+        </md-list-item>
+    </md-list>
+
+    <div id="config-list"></div>
+</body>
+
+</html>
