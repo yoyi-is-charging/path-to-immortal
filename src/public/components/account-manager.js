@@ -1,6 +1,7 @@
 // src/public/components/account-manager.js
 import { wsClient } from './websocket-client.js';
 import { eventBus } from './event-bus.js';
+import { notificationManager } from './notification-manager.js';
 
 export class AccountManager {
     constructor() {
