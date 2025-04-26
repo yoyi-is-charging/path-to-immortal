@@ -5,7 +5,7 @@ import path from 'path';
 const LOG_DIR = path.resolve(__dirname, '../../logs');
 
 export const logger = winston.createLogger({
-    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    level: 'info',
     format: winston.format.combine(
         winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         winston.format.errors({ stack: true }),
