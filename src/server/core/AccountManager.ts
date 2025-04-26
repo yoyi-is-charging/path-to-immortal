@@ -32,7 +32,7 @@ export class AccountManager {
                 fishing: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 }, levels: [5, 1] },
                 wooding: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 }, levels: [5, 1], minPrice: 3950 },
                 hell: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 }, maxLevel: 12, collect: true },
-                fortune: { enabled: false, time: { hours: 6, minutes: 0, seconds: 0 }, occupation: 1, realmWar: '东1', levelWar: '上路 1' },
+                fortune: { enabled: false, time: { hours: 18, minutes: 0, seconds: 0 }, occupation: 1, realmWar: '东1', levelWar: '上路 1' },
                 misc: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, timePost: { hours: 21, minutes: 0, seconds: 0 }, forgeLimit: 50, forgeTypes: [1, 2, 3], fight: { enabled: false } },
             }
         };

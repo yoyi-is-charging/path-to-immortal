@@ -503,16 +503,16 @@ export default class MiscHandler implements CommandHandler {
                 instance.scheduleCommand({ type, body: '大混战报名', date: status?.battleSignUp?.isFinished ? getDate({ ...config.time, dayOffset: 1 }) : status?.battleSignUp?.nextTime });
                 break;
             case 'misc_receiveEnergy':
-                instance.scheduleCommand({ type, body: '领道友能量', date: getDate({ ...config.time, dayOffset: status?.receiveEnergy ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '领道友能量', date: getDate({ ...config.timePost, dayOffset: status?.receiveEnergy ? 1 : 0 }) });
                 break;
             case 'misc_receiveTransmission':
-                instance.scheduleCommand({ type, body: '接收传功', date: getDate({ ...config.time, dayOffset: status?.receiveTransmission ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '接收传功', date: getDate({ ...config.timePost, dayOffset: status?.receiveTransmission ? 1 : 0 }) });
                 break;
             case 'misc_receiveTaskReward':
-                instance.scheduleCommand({ type, body: '一键领任务奖励', date: getDate({ ...config.time, dayOffset: status?.receiveTaskReward ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '一键领任务奖励', date: getDate({ ...config.timePost, dayOffset: status?.receiveTaskReward ? 1 : 0 }) });
                 break;
             case 'misc_receiveBlessing':
-                instance.scheduleCommand({ type, body: '接收赐福', date: getDate({ ...config.time, dayOffset: status?.receiveBlessing ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '接收赐福', date: getDate({ ...config.timePost, dayOffset: status?.receiveBlessing ? 1 : 0 }) });
                 break;
         }
     }
