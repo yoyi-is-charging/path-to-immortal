@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏账户管理器</title>
+
+    <!-- <script type="module" src="components/import-map.js"></script>
+    <import-map></import-map> -->
+    <script type="importmap">
+        { "imports": { "tslib": "/node_modules/tslib/tslib.es6.js", "lit/": "/node_modules/lit/", "lit": "/node_modules/lit/index.js", "@lit/reactive-element": "/node_modules/@lit/reactive-element/reactive-element.js", "@lit/reactive-element/": "/node_modules/@lit/reactive-element/", "lit-html": "/node_modules/lit-html/lit-html.js", "lit-html/": "/node_modules/lit-html/", "lit-element/": "/node_modules/lit-element/" } }
+    </script>
+
+    <script type="module" src="components/account-list.js"></script>
+    <script type="module" src="/node_modules/@material/web/all.js"></script>
+    <style>
+        body {
+            visibility: hidden;
+        }
+
+        md-fab {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 1000;
+        }
+    </style>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => document.body.style.visibility = 'visible');    
+    </script>
+</head>
+
+<body>
+
+    <md-dialog id="add-account-dialog">
+        <div slot="headline">添加账户</div>
+        <form slot="content" id="add-account-form" method="dialog">
+            <md-filled-text-field id="username" required class="form-field">
+                账号
+            </md-filled-text-field>
+            <md-filled-text-field type="password" id="password" class="form-field">
+                密码
+            </md-filled-text-field>
+        </form>
+        <div slot="actions">
+            <md-text-button class="submit-button" type="submit" form="add-account-form">提交</md-text-button>
+        </div>
+    </md-dialog>
+
+    <md-list class="account-list">
+        <md-list-item>
+            <div slot="headline">
+                <h2 class="headline">
+                    账户列表
+                    <small class="stats-text" id="stats-text"></small>
+                </h2>
+            </div>
+        </md-list-item>
+        <md-divider></md-divider>
+
+        <div id="account-list"></div>
+    </md-list>
+
+    <md-fab class="add-account-button">
+        <svg slot="icon" viewBox="0 0 36 36">
+            <path d="M16 16v14h4V20z M30 16H20l-4 4h14z M6 16v4h10l4-4z M20 16V6h-4v14z"></path>
+        </svg>
+    </md-fab>
+
+    <md-dialog id="qr-code-dialog">
+        <div slot="headline">扫码登录</div>
+        <img id="qr-code" src="" alt="二维码" slot="content">
+    </md-dialog>
+</body>
+
+</html>
