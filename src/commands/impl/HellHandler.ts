@@ -115,7 +115,7 @@ export default class HellHandler implements CommandHandler {
             });
 
             this.lastUpdateDate = new Date();
-            logger.info(`hell data updated successfully`);
+            logger.debug(`hell data updated successfully`);
         } catch (error) {
             logger.error(`Failed to fetch hell data: ${(error as Error).message}`);
             throw error;
