@@ -35,11 +35,11 @@ export class GameInstance {
     ) {
         this.baseUrl = "https://pd.qq.com";
         this.loginUrl = `https://xui.ptlogin2.qq.com/cgi-bin/xlogin?appid=1600001587&s_url=${encodeURIComponent(this.baseUrl)}`;
-        this.channelUrl = process.env.CHANNEL_URL!;
-        const lastUpdated = this.account.metadata.lastUpdateTime;
-        const lastUpdatedDate = lastUpdated ? new Date(lastUpdated).setHours(0, 0, 0, 0) : null;
+        this.channelUrl = account.config.metadata?.channelUrl ?? process.env.CHANNEL_URL!;
+        const lastUpdate = this.account.metadata.lastUpdateTime;
+        const lastUpdateDate = lastUpdate ? new Date(lastUpdate).setHours(0, 0, 0, 0) : null;
         const today = new Date().setHours(0, 0, 0, 0);
-        if (lastUpdatedDate !== today) this.resetStatus();
+        if (lastUpdateDate !== today) this.resetStatus();
     }
 
 

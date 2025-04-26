@@ -199,6 +199,9 @@ export const StatusSchema = z.object({
 
 export type Status = z.infer<typeof StatusSchema>;
 
+const MetadataConfigSchema = z.object({
+    channelUrl: z.string().optional().describe('频道URL'),
+}).describe('元数据配置');
 
 const MeditationConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动打坐'),
@@ -334,6 +337,7 @@ const MiscConfigSchema = z.object({
 }).describe('日常配置');
 
 export const ConfigSchema = z.object({
+    metadata: MetadataConfigSchema.optional(),
     meditation: MeditationConfigSchema.optional(),
     garden: GardenConfigSchema.optional(),
     bounty: BountyConfigSchema.optional(),
