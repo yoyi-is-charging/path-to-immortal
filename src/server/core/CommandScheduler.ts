@@ -21,6 +21,16 @@ export class CommandScheduler {
         CommandFactory.registerScheduler(this.instance);
     }
 
+    public async destroy() {
+        await new Promise<void>(resolve => {
+            const checkPendingCommands = () => this.isPending() ? setTimeout(checkPendingCommands, 1000) : resolve();
+            checkPendingCommands();
+        });
+        this.scheduledCommands.forEach(cmd => clearTimeout(cmd.timeoutId!));
+        this.pendingCommands.length = 0;
+        this.scheduledCommands.length = 0;
+    }
+
     public isPending() { return this.pendingCommands.length > 0; }
     public isScheduled() { return this.scheduledCommands.length > 0; }
     public getNextScheduledCommand() {

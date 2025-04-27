@@ -79,6 +79,9 @@ export default class MeditationHandler implements CommandHandler {
 
     registerScheduler(instance: GameInstance): void {
         const config = instance.account.config.meditation!;
-        instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: instance.account.status.meditation?.finishTime ?? getDate({ ...config.time!, dayOffset: instance.account.status.meditation?.exhausted ? 1 : 0 }) });
+        if (instance.account.status.meditation?.finishTime)
+            instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: instance.account.status.meditation?.finishTime });
+        else if (config.enabled)
+            instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: getDate({ ...config.time!, dayOffset: instance.account.status.meditation?.exhausted ? 1 : 0 }) });
     }
 }
