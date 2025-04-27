@@ -69,10 +69,7 @@ export class GameInstance {
 
     public async updateSession() {
         this.account.online = false;
-        await new Promise<void>((resolve) => {
-            const checkPendingCommands = () => (this.scheduler?.isPending()) ? setTimeout(checkPendingCommands, 100) : resolve();
-            checkPendingCommands();
-        });
+        await this.scheduler?.destroy();
         logger.info(`Navigating to login page for accountId: ${this.account.id}`);
         await this.page!.goto(this.loginUrl, { waitUntil: 'domcontentloaded' });
         if (!await this.linkLogin() && !await this.credentialLogin() && !await this.qrLogin())
