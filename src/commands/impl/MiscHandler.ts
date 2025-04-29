@@ -469,10 +469,10 @@ export default class MiscHandler implements CommandHandler {
                 instance.scheduleCommand({ type, body: '传功', date: getDate({ ...config.time, dayOffset: status?.transmission ? 1 : 0 }) });
                 break;
             case 'misc_kill':
-                instance.scheduleCommand({ type, body: '砍一刀', date: getDate({ ...config.time, dayOffset: (status?.kill?.count || 0) === 10 ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '砍一刀', date: getDate({ ...config.time, dayOffset: (status?.kill?.count || 0) >= 10 ? 1 : 0 }) });
                 break;
             case 'misc_challenge':
-                instance.scheduleCommand({ type, body: '挑战噬魂兽', date: getDate({ ...config.time, dayOffset: (status?.challenge?.count || 0) === 3 ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '挑战噬魂兽', date: getDate({ ...config.time, dayOffset: (status?.challenge?.count || 0) >= 3 ? 1 : 0 }) });
                 break;
             case 'misc_forge':
                 instance.scheduleCommand({ type, body: `锻造 ${config.forgeTypes![0]}`, date: getDate({ ...config.time, dayOffset: (status?.forge?.count || 0) >= config.forgeLimit! ? 1 : 0 }) });
@@ -481,13 +481,13 @@ export default class MiscHandler implements CommandHandler {
                 instance.scheduleCommand({ type, body: '塔攻击', date: getDate({ ...config.time, dayOffset: (status?.tower?.count || 0) >= 5 ? 1 : 0 }) });
                 break;
             case 'misc_worship':
-                instance.scheduleCommand({ type, body: '膜拜排位 1', date: getDate({ ...config.time, dayOffset: (status?.worship?.count || 0) === 10 ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: '膜拜排位 1', date: getDate({ ...config.time, dayOffset: (status?.worship?.count || 0) >= 10 ? 1 : 0 }) });
                 break;
             case 'misc_fightSect':
                 if (!config.fight?.enabled)
-                    instance.scheduleCommand({ type: 'misc_fightRandom', body: '随机试剑 1', date: getDate({ ...config.time, dayOffset: (status?.fight?.randomCount || 0) === 10 ? 1 : 0 }) });
+                    instance.scheduleCommand({ type: 'misc_fightRandom', body: '随机试剑 1', date: getDate({ ...config.time, dayOffset: (status?.fight?.randomCount || 0) >= 10 ? 1 : 0 }) });
                 else
-                    instance.scheduleCommand({ type: 'misc_fightMaster', body: '师门切磋 1', date: getDate({ ...config.time, dayOffset: (status?.fight?.masterCount || 0) === 10 ? 1 : 0 }) });
+                    instance.scheduleCommand({ type: 'misc_fightMaster', body: '师门切磋 1', date: getDate({ ...config.time, dayOffset: (status?.fight?.masterCount || 0) >= 10 ? 1 : 0 }) });
                 break;
             case 'misc_fight':
                 if (config.fight?.enabled)
