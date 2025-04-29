@@ -12,8 +12,9 @@ export default class SecretRealmHandler implements CommandHandler {
         ['进入秘境', 'secretRealm'],
         ['秘境选择', 'secretRealm'],
     ]);
-    readonly RESPONSE_PATTERN = /注意选择合适的技能|仅可进入秘境1次|可以选择以下技能|今日本层秘境魔物已全部清除|秘境选择已过期/;
+    readonly RESPONSE_PATTERN = /注意选择合适的技能|仅可进入秘境1次|可以选择以下技能|今日本层秘境魔物已全部清除|秘境选择已过期|已进入秘境/;
     readonly MONSTER_PATTERN = /魔物境界:(?<monsterLevel>.*)/;
+    readonly ENTERED_PATTERN = /已进入秘境/;
     readonly SKILL_PATTERN = /(?<index>\d+):(?<name>[^\(]*)\((?<type>[^\+]*)\+(?<strength>\d+)[%次]\)/;
     readonly SKILL_PATTERN_GLOBAL = /(?<index>\d+):(?<name>[^\(]*)\((?<type>[^\+]*)\+(?<strength>\d+)[%次]\)/g;
 
@@ -32,6 +33,9 @@ export default class SecretRealmHandler implements CommandHandler {
             const selectedSkill = config.skillTypePriority!.map(type => skills.find(skill => skill.type === type)).filter(skill => skill !== undefined)[0];
             instance.updateStatus({ secretRealm: { inProgress: true, isFinished: false, monsterLevel, skill: selectedSkill } });
             instance.scheduleCommand({ type: 'secretRealm', body: `秘境选择 ${selectedSkill.index}` }, 1000);
+        } else if (this.ENTERED_PATTERN.test(response)) {
+            instance.updateStatus({ secretRealm: { inProgress: true, isFinished: false, monsterLevel: undefined, skill: undefined } });
+            instance.scheduleCommand({ type: 'secretRealm', body: `秘境选择 1` }, 1000);
         } else {
             instance.updateStatus({ secretRealm: { inProgress: false, isFinished: true, monsterLevel: undefined, skill: undefined } });
             this.registerScheduler(instance);
