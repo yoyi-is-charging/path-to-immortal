@@ -47,11 +47,11 @@ export class GameInstance {
         this.browser = await chromium.launch({ headless: true });
         this.context = await this.browser.newContext();
         this.page = await this.context.newPage();
+        this.scheduler = new CommandScheduler(this);
         const session = this.account.session;
         if (!session)
             await this.updateSession();
-        else
-            await this.init();
+        await this.init();
     }
 
     public async close() {
@@ -75,7 +75,6 @@ export class GameInstance {
         if (!await this.linkLogin() && !await this.credentialLogin() && !await this.qrLogin())
             throw new Error(`Login failed for accountId: ${this.account.id}`);
         await AccountManager.persist();
-        await this.init();
         EventBus.emit('sessionUpdated', { accountId: this.account.id, success: true });
     }
 
@@ -205,8 +204,7 @@ export class GameInstance {
         });
         this.account.online = true;
         await this.scheduleRelogin();
-        this.scheduler = new CommandScheduler(this);
-        this.scheduler.init();
+        this.scheduler!.init();
     }
 
     public async scheduleRelogin() {
@@ -217,6 +215,7 @@ export class GameInstance {
             } catch {
                 EventBus.emit('sessionUpdated', { accountId: this.account.id, success: false });
             }
+            await this.init();
         }, timestamp - Date.now());
         EventBus.emit('sessionUpdateScheduled', { accountId: this.account.id, timestamp });
     }
