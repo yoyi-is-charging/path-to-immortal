@@ -35,11 +35,11 @@ export default class MeditationHandler implements CommandHandler {
         if (command.type === 'meditation_tantricResponse') {
             const finishTime = parseDate(response, this.FINISH_PATTERN);
             if (finishTime) {
-                const targetInstance = InstanceManager.findInstance(instance.account.status.meditation.target?.bytes_pb_reserve!)!;
+                const sourceInstance = InstanceManager.findInstance(instance.account.status.meditation.target?.bytes_pb_reserve!)!;
                 instance.updateStatus({ meditation: { inProgress: true, finishTime, exhausted: false } });
-                targetInstance.updateStatus({ meditation: { inProgress: true, finishTime, exhausted: false } });
+                sourceInstance.updateStatus({ meditation: { inProgress: true, finishTime, exhausted: false } });
                 instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
-                targetInstance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
+                sourceInstance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
             }
         }
         if (command.type === 'meditation') {
@@ -48,6 +48,7 @@ export default class MeditationHandler implements CommandHandler {
             const exhausted = this.EXHAUSTED_PATTERN.test(response);
             instance.updateStatus({ meditation: { inProgress, finishTime, exhausted } });
             if (config.enabled && !inProgress && !exhausted) {
+                instance.updateStatus({ meditation: { target: undefined } });
                 if (config.tantric?.enabled) {
                     let targetInstance: GameInstance | undefined = undefined;
                     for (const target of config.tantric.targets!) {
@@ -65,8 +66,14 @@ export default class MeditationHandler implements CommandHandler {
                 } else
                     instance.scheduleCommand({ type: 'meditation', body: `打坐 ${config.count}` });
             }
-            if (inProgress)
+            if (inProgress) {
                 instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
+                const sourceInstance = InstanceManager.findInstance(instance.account.status.meditation.target?.bytes_pb_reserve!);
+                if (sourceInstance) {
+                    sourceInstance.updateStatus({ meditation: { inProgress: true, finishTime, exhausted: false } });
+                    sourceInstance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
+                }
+            }
             if (exhausted)
                 this.registerScheduler(instance);
         }

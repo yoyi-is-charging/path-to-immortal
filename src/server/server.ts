@@ -63,6 +63,7 @@ async function main() {
                 if (!instance)
                     throw new Error(`Instance for account ${accountId} not found`);
                 await instance.updateSession();
+                await instance.init();
                 return instance.account;
             },
             patchStatus: async ({ accountId, patch }: { accountId: string, patch: Partial<Status> }) => {

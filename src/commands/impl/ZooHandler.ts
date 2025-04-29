@@ -14,8 +14,9 @@ export default class ZooHandler implements CommandHandler {
         ['力劈', 'zoo'],
         ['逃跑', 'zoo'],
     ]);
-    readonly RESPONSE_PATTERN = /剩余妖兽|仅可进入妖兽园1次|妖兽已过期|被消灭了/;
+    readonly RESPONSE_PATTERN = /剩余妖兽|仅可进入妖兽园1次|妖兽已过期|被消灭了|已进入妖兽园/;
     readonly REMAINING_PATTERN = /剩余妖兽(?<remaining>\d+)/;
+    readonly ENTERED_PATTERN = /已进入妖兽园/;
     readonly VERTICAL_PATTERN = /(?<=#)(?<monster_1>[^\(你]+)\(([0-9]+)\)\n(?<monster_2>[^\(你]+)\(([0-9]+)\)(\n(?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
     readonly HORIZONTAL_PATTERN = /(?<=#)(?<monster_1>[^\(你]+)\(([0-9]+)\)((?<monster_2>[^\(你]+)\(([0-9]+)\))?((?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
     readonly RETRY_THRESHOLD = 5;
@@ -42,6 +43,9 @@ export default class ZooHandler implements CommandHandler {
             instance.updateStatus({ zoo: { inProgress: remaining > 0, isFinished: remaining === 0, remaining, choice } });
             if (choice)
                 instance.scheduleCommand({ type: 'zoo', body: choice }, 1000);
+        } else if (this.ENTERED_PATTERN.test(response)) {
+            instance.updateStatus({ zoo: { inProgress: true, isFinished: false, remaining: undefined, choice: '逃跑' } });
+            instance.scheduleCommand({ type: 'zoo', body: '逃跑' }, 1000);
         } else {
             instance.updateStatus({ zoo: { inProgress: false, isFinished: true, remaining: 0, choice: undefined } });
             this.registerScheduler(instance);
