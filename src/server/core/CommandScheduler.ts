@@ -8,7 +8,7 @@ import { GameInstance } from './GameInstance';
 export class CommandScheduler {
 
     static readonly COLLISION_THRESHOLD = 1000;
-    static networkErrorTimestamp: number | null = null;
+    static readonly DESTROY_THRESHOLD = 60 * 1000; // 60 seconds
 
     constructor(
         private readonly instance: GameInstance,
@@ -23,8 +23,8 @@ export class CommandScheduler {
 
     public async destroy() {
         await new Promise<void>(resolve => {
-            const checkPendingCommands = () => this.isPending() ? setTimeout(checkPendingCommands, 1000) : resolve();
-            checkPendingCommands();
+            const checkCommands = () => (this.isPending() || (this.isScheduled() && this.getNextScheduledCommand().date!.getTime() - Date.now() < CommandScheduler.DESTROY_THRESHOLD)) ? setTimeout(checkCommands, 1000) : resolve();
+            checkCommands();
         });
         this.scheduledCommands.forEach(cmd => clearTimeout(cmd.timeoutId!));
         this.pendingCommands.length = 0;
@@ -77,7 +77,6 @@ export class CommandScheduler {
         this.commandCount++;
         try {
             await this.instance.sendCommand(command.body);
-            CommandScheduler.networkErrorTimestamp = null;
             this.scheduledCommands.splice(this.scheduledCommands.indexOf(command), 1);
             this.pendingCommands.push(command);
             EventBus.emit('commandSent', { accountId: this.instance.account.id, command });
