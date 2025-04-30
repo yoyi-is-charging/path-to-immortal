@@ -63,6 +63,7 @@ export class GameInstance {
             clearTimeout(this.fetchTimeout);
             this.fetchTimeout = null;
         }
+        this.scheduler?.destroy();
         await this.browser!.close();
         this.account.online = false;
     }
