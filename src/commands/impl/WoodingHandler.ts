@@ -79,10 +79,10 @@ export default class WoodingHandler implements CommandHandler {
     registerTypeScheduler(instance: GameInstance, type: string): void {
         const status = instance.account.status.wooding;
         const config = instance.account.config.wooding!;
-        if (!config.enabled)
-            return;
         switch (type) {
             case 'wooding':
+                if (!config.enabled)
+                    break;
                 if (status?.inProgress)
                     instance.scheduleCommand({ type: 'wooding', body: '浇水', date: status.waterTime });
                 else if (!status?.finishedCount)
