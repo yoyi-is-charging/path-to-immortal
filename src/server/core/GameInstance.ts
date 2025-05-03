@@ -49,7 +49,7 @@ export class GameInstance {
         this.page = await this.context.newPage();
         this.scheduler = new CommandScheduler(this);
         const session = this.account.session;
-        if (!session)
+        if (!session || this.getSessionExpirationTime() < Date.now())
             await this.updateSession();
         await this.init();
     }
@@ -315,8 +315,8 @@ export class GameInstance {
         return content.match(new RegExp(`(?<=${this.tinyID!}\\))[\\s\\S]*`))?.[0] || null;
     }
 
-    public updateStatus(status: Partial<Status>) {
-        AccountManager.patchStatus(this.account.id, status);
+    public async updateStatus(status: Partial<Status>) {
+        await AccountManager.patchStatus(this.account.id, status);
     }
 
     public async scheduleCommand(command: Command, delay: number = 0) {
@@ -332,8 +332,8 @@ export class GameInstance {
         });
     }
 
-    public resetStatus() {
-        this.updateStatus({
+    public async resetStatus() {
+        await this.updateStatus({
             meditation: { exhausted: false },
             garden: { ripen: { ripeCount: 30 } },
             secretRealm: { inProgress: false, isFinished: false },
