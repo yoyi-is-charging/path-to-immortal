@@ -20,7 +20,7 @@ export class InstanceManager {
     public static async createInstance(account: Account) {
         if (this.instances.has(account.id)) {
             logger.info(`Instance already exists for accountId: ${account.id}, closing instance...`);
-            this.closeInstance(account);
+            await this.closeInstance(account);
         }
         const instance = new GameInstance(account);
         this.instances.set(account.id, instance);
@@ -28,7 +28,7 @@ export class InstanceManager {
             await instance.register();
         } catch (error) {
             logger.error((error as Error).message);
-            this.closeInstance(account);
+            await this.closeInstance(account);
             throw new Error((error as Error).message);
         }
     }

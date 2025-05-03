@@ -69,8 +69,8 @@ export class GameInstance {
     }
 
     public async updateSession() {
-        this.account.online = false;
         await this.scheduler?.destroy();
+        this.account.online = false;
         logger.info(`Navigating to login page for accountId: ${this.account.id}`);
         await this.page!.goto(this.loginUrl, { waitUntil: 'domcontentloaded' });
         if (!await this.linkLogin() && !await this.credentialLogin() && !await this.qrLogin())
@@ -264,8 +264,8 @@ export class GameInstance {
             });
             if (response.ok) {
                 const data = await response.json();
-                if (data.data.channel_msg_rsp === null)
-                    return;
+                if (!data?.data?.channel_msg_rsp)
+                    throw new Error(`Invalid response data: ${JSON.stringify(data)} with params: ${JSON.stringify(this.receiveParams)}`);
                 const msg = data.data.channel_msg_rsp.rpt_channel_msg[0];
                 const begIndex = parseInt(msg.rsp_begin_seq);
                 const endIndex = parseInt(msg.rsp_end_seq);
@@ -282,6 +282,7 @@ export class GameInstance {
             }
         } catch (error) {
             logger.error(`Error fetching responses: ${(error as Error).message}`);
+            this.setFetchParams(0, 0);
         } finally {
             this.isFetching = false;
             this.scheduleFetch();
