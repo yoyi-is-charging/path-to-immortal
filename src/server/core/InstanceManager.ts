@@ -53,8 +53,8 @@ export class InstanceManager {
         const now = new Date();
         const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
         const timeUntilMidnight = nextMidnight.getTime() - now.getTime();
-        setTimeout(() => {
-            this.instances.forEach(instance => instance.resetStatus());
+        setTimeout(async () => {
+            await Promise.all(Array.from(this.instances.values()).map(instance => instance.resetStatus()));
             this.scheduleStatusReset();
         }, timeUntilMidnight);
     }

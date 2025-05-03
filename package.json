@@ -5,6 +5,7 @@
   },
   "dependencies": {
     "@material/web": "^2.3.0",
+    "async": "^3.2.6",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "playwright-core": "^1.52.0",
@@ -14,6 +15,7 @@
     "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
+    "@types/async": "^3.2.24",
     "@types/express": "^5.0.1",
     "@types/ws": "^8.18.1",
     "playwright": "^1.52.0",
