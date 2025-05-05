@@ -81,8 +81,10 @@ export class GameInstance {
 
     private async linkLogin() {
         try {
+            logger.info(`Attempting link login for accountId: ${this.account.id}`);
             const loginLink = await this.page!.waitForSelector(`a[uin="${this.account.id}"]`, { timeout: 5000 });
             await loginLink!.click();
+            logger.info(`Waiting for navigation to ${this.baseUrl} for accountId: ${this.account.id}`);
             await this.page!.waitForURL(this.baseUrl, { waitUntil: 'domcontentloaded' });
             this.account.session = await this.context!.cookies();
             return true;
@@ -94,6 +96,7 @@ export class GameInstance {
 
     private async credentialLogin() {
         try {
+            logger.info(`Attempting credential login for accountId: ${this.account.id}`);
             await this.page!.click('#switcher_plogin');
             await this.page!.waitForSelector('#u');
             await this.page!.waitForSelector('#p');
@@ -104,6 +107,7 @@ export class GameInstance {
             await this.page!.fill('#u', id);
             await this.page!.fill('#p', password);
             await this.page!.click('#login_button');
+            logger.info(`Waiting for navigation to ${this.baseUrl} for accountId: ${this.account.id}`);
             await this.page!.waitForURL(this.baseUrl, { timeout: 5000, waitUntil: 'commit' });
             this.account.session = await this.context!.cookies();
             return true;
@@ -115,6 +119,7 @@ export class GameInstance {
 
     private async qrLogin() {
         try {
+            logger.info(`Attempting QR login for accountId: ${this.account.id}`);
             const captureQRCode = async (response: Response) => {
                 const url = response.url();
                 if (url.includes('ptqrshow')) {
@@ -125,6 +130,7 @@ export class GameInstance {
             };
             this.page?.on('response', captureQRCode);
             await this.page!.click('#switcher_qlogin');
+            logger.info(`Waiting for navigation to ${this.loginUrl} for accountId: ${this.account.id}`);
             await this.page?.waitForURL(this.baseUrl, { timeout: 60000, waitUntil: 'load' });
             this.account.session = await this.context!.cookies();
             this.page?.off('response', captureQRCode);
