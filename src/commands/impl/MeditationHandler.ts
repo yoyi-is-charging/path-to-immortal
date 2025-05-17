@@ -17,7 +17,7 @@ export default class MeditationHandler implements CommandHandler {
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['meditation', /请等待(打坐|双修|双休)完成|吸收灵力成功|你还没有打坐|需要消耗次数/],
-        ['meditation_tantricRequest', /想和你一起双休|已经发起一个双休请求|请对方先吸收/],
+        ['meditation_tantricRequest', /想和你一起双休|已经发起一个双休请求|请对方先吸收|需要消耗次数/],
         ['meditation_tantricResponse', /一起双休中|没找到你要同意的双休请求/],
     ]);
     readonly FINISH_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
@@ -28,15 +28,21 @@ export default class MeditationHandler implements CommandHandler {
         instance.account.status.meditation = instance.account.status.meditation || {};
         const config = instance.account.config.meditation!;
         if (command.type === 'meditation_tantricRequest') {
-            const target = instance.account.status.meditation?.target!;
-            const targetInstance = InstanceManager.findInstance(target.bytes_pb_reserve!)!;
-            if (this.REQUEST_ABSORB_PATTERN.test(response)) {
-                targetInstance.scheduleCommand({ type: 'meditation', body: '吸收灵力' });
-                instance.scheduleCommand(command, 1000);
-            } else {
-                targetInstance.updateStatus({ meditation: { target: { str: instance.account.status.personalInfo!.str!, bytes_pb_reserve: instance.account.status.personalInfo!.bytes_pb_reserve! } } });
-                targetInstance.scheduleCommand({ type: 'meditation_tantricResponse', body: `同意双休` });
+            const exhausted = this.EXHAUSTED_PATTERN.test(response);
+            instance.updateStatus({ meditation: { exhausted } });
+            if (!exhausted) {
+                const target = instance.account.status.meditation?.target!;
+                const targetInstance = InstanceManager.findInstance(target.bytes_pb_reserve!)!;
+                if (this.REQUEST_ABSORB_PATTERN.test(response)) {
+                    targetInstance.scheduleCommand({ type: 'meditation', body: '吸收灵力' });
+                    instance.scheduleCommand(command, 1000);
+                } else {
+                    targetInstance.updateStatus({ meditation: { target: { str: instance.account.status.personalInfo!.str!, bytes_pb_reserve: instance.account.status.personalInfo!.bytes_pb_reserve! } } });
+                    targetInstance.scheduleCommand({ type: 'meditation_tantricResponse', body: `同意双休` });
+                }
             }
+            if (exhausted)
+                this.registerScheduler(instance);
         }
         if (command.type === 'meditation_tantricResponse') {
             const finishTime = parseDate(response, this.FINISH_PATTERN);
