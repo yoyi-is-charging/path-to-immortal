@@ -28,6 +28,7 @@ export class GameInstance {
     public scheduler: CommandScheduler | null = null;
     private fetchTimeout: NodeJS.Timeout | null = null;
     private reloginTimeout: NodeJS.Timeout | null = null;
+    private updateSessionFailed: boolean = false;
 
 
     constructor(
@@ -73,8 +74,12 @@ export class GameInstance {
         this.account.online = false;
         logger.info(`Navigating to login page for accountId: ${this.account.id}`);
         await this.page!.goto(this.loginUrl, { waitUntil: 'domcontentloaded' });
-        if (!await this.linkLogin() && !await this.credentialLogin() && !await this.qrLogin())
+        if (!await this.linkLogin() && !await this.credentialLogin() && !await this.qrLogin()) {
+            this.updateSessionFailed = true;
             throw new Error(`Login failed for accountId: ${this.account.id}`);
+        }
+        this.updateSessionFailed = false;
+        logger.info(`Login successful for accountId: ${this.account.id}`);
         await AccountManager.persist();
         EventBus.emit('sessionUpdated', { accountId: this.account.id, success: true });
     }
@@ -82,7 +87,7 @@ export class GameInstance {
     private async linkLogin() {
         try {
             logger.info(`Attempting link login for accountId: ${this.account.id}`);
-            const loginLink = await this.page!.waitForSelector(`a[uin="${this.account.id}"]`, { timeout: 5000 });
+            const loginLink = await this.page!.waitForSelector(`a[uin="${this.account.id}"][type="4"]`, { timeout: 5000 });
             await loginLink!.click();
             logger.info(`Waiting for navigation to ${this.baseUrl} for accountId: ${this.account.id}`);
             await this.page!.waitForURL(this.baseUrl, { waitUntil: 'domcontentloaded' });
@@ -210,7 +215,8 @@ export class GameInstance {
             checkParamsCaptured();
         });
         this.account.online = true;
-        await this.scheduleRelogin();
+        if (!this.updateSessionFailed)
+            await this.scheduleRelogin();
         this.scheduler!.init();
     }
 
