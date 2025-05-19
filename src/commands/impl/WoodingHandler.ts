@@ -4,6 +4,8 @@ import { Command } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
 import { parseDate, getDate } from '../../utils/TimeUtils';
+import { env } from 'process';
+import { EventBus } from '../../server/core/EventBus';
 
 
 export default class WoodingHandler implements CommandHandler {
@@ -57,8 +59,12 @@ export default class WoodingHandler implements CommandHandler {
             const priceUpdateTime = parseDate(response, this.PRICE_UPDATE_PATTERN);
             instance.updateStatus({ wooding: { price, amount, priceUpdateTime } });
             instance.scheduleCommand({ type: 'wooding_priceInquiry', body: '我的树木', date: priceUpdateTime });
-            if (config.minPrice && price >= config.minPrice && amount > this.AMOUNT_THRESHOLD)
-                instance.scheduleCommand({ type: 'wooding_sell', body: `出售给木商 ${amount}` });
+            if (config.minPrice && price >= config.minPrice) {
+                if (process.env.BOT_CHAT_ID)
+                    EventBus.emit('notification', { chatId: process.env.BOT_CHAT_ID, message: `木块价格已达到 ${price}，请及时出售` });
+                if (amount > this.AMOUNT_THRESHOLD)
+                    instance.scheduleCommand({ type: 'wooding_sell', body: `出售给木商 ${amount}` });
+            }
         }
         if (command.type === 'wooding_sell') {
             const isSelling = this.CONFIRM_SELL_PATTERN.test(response);
