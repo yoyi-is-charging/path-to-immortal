@@ -13,14 +13,23 @@ import zodToJsonSchema from 'zod-to-json-schema';
 import { Account, Config, ConfigSchema, Status, StatusSchema } from './types';
 import { ZodObject } from 'zod';
 import { EventBus } from './core/EventBus';
+import { Telegraf } from 'telegraf';
 
 async function main() {
 
     dotenv.config({ path: __dirname + '/../../.env' });
 
+
+
     const app = express();
     const server = createServer(app);
     const wss = new WebSocket.Server({ server });
+
+    const bot: Telegraf | undefined = process.env.BOT_TOKEN ? new Telegraf(process.env.BOT_TOKEN) : undefined;
+    if (bot) {
+        bot.command('start', (ctx) => ctx.reply(`BOT_CHAT_ID: ${ctx.chat.id}`));
+        bot.launch().then(() => logger.info('Telegram bot started'));
+    }
 
     wss.on('connection', (ws, req) => {
 
@@ -114,12 +123,15 @@ async function main() {
             broadcast('commandsUpdated', { id: accountId, scheduledCommands, pendingCommands });
         }
 
+        const notify: ({ chatId, message }: { chatId: string, message: string }) => void = ({ chatId, message }) => bot!.telegram.sendMessage(chatId, message);
+
         EventBus.on('statusUpdated', broadcastStatus);
         EventBus.on('commandScheduled', broadcastCommands);
         EventBus.on('commandSent', broadcastCommands);
         EventBus.on('commandProcessed', broadcastCommands);
         EventBus.on('qrcodeUpdated', broadcastQRCode);
         EventBus.on('sessionUpdated', broadcastSessionUpdate);
+        EventBus.on('notification', notify);
 
         ws.on('close', () => {
             EventBus.off('statusUpdated', broadcastStatus);
@@ -127,6 +139,8 @@ async function main() {
             EventBus.off('commandSent', broadcastCommands);
             EventBus.off('commandProcessed', broadcastCommands);
             EventBus.off('qrcodeUpdated', broadcastQRCode);
+            EventBus.off('sessionUpdated', broadcastSessionUpdate);
+            EventBus.off('notification', notify);
             logger.info(`WebSocket connection closed`);
         });
     });
