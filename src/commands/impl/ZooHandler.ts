@@ -17,8 +17,8 @@ export default class ZooHandler implements CommandHandler {
     readonly RESPONSE_PATTERN = /剩余妖兽|仅可进入妖兽园1次|妖兽已过期|被消灭了|已进入妖兽园/;
     readonly REMAINING_PATTERN = /剩余妖兽(?<remaining>\d+)/;
     readonly ENTERED_PATTERN = /已进入妖兽园/;
-    readonly VERTICAL_PATTERN = /(?<=#)(?<monster_1>[^\(你]+)\(([0-9]+)\)\n(?<monster_2>[^\(你]+)\(([0-9]+)\)(\n(?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
-    readonly HORIZONTAL_PATTERN = /(?<=#)(?<monster_1>[^\(你]+)\(([0-9]+)\)((?<monster_2>[^\(你]+)\(([0-9]+)\))?((?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
+    readonly VERTICAL_PATTERN = /(?<monster_1>[^\(你]+)\(([0-9]+)\)\n(?<monster_2>[^\(你]+)\(([0-9]+)\)(\n(?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
+    readonly HORIZONTAL_PATTERN = /(?<monster_1>[^\(你]+)\(([0-9]+)\)((?<monster_2>[^\(你]+)\(([0-9]+)\))?((?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
     readonly RETRY_THRESHOLD = 5;
 
     private retryCount = 0;
