@@ -19,7 +19,8 @@ export default class HellHandler implements CommandHandler {
         ['地狱寻宝', 'hell'],
         ['提前领取地狱寻宝奖励', 'hell'],
     ]);
-    readonly RESPONSE_PATTERN = /BOSS的位置|提前领取地狱寻宝奖励|领取成功|你今日已领过寻宝府石/;
+    readonly RESPONSE_PATTERN = /BOSS的位置|提前领取地狱寻宝奖励|领取成功|你今日已领过寻宝府石|地狱寻宝 10|府石已领取/;
+    readonly FINISH_PATTERN = /府石已领取/;
     readonly LEVEL_PATTERN = /第(?<level>\d+)层/;
     readonly BOSS_POSITION_PATTERN = /BOSS的位置:(?<position>\d+-\d)/;
     readonly POSITION_PATTERN = /^[1-5]-[1-5]$/;
@@ -30,13 +31,15 @@ export default class HellHandler implements CommandHandler {
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.hell = instance.account.status.hell || {};
         const config = instance.account.config.hell!;
-        if (this.BOSS_POSITION_PATTERN.test(response) || this.LEVEL_PATTERN.test(response)) {
+        if (!this.FINISH_PATTERN.test(response) && (this.BOSS_POSITION_PATTERN.test(response) || this.LEVEL_PATTERN.test(response))) {
             const level = parseInt(response.match(this.LEVEL_PATTERN)?.groups?.level || '0') + 1;
             if (level <= 20) {
                 try {
                     await this.getHellData();
                 } catch (error) {
                     logger.error(`Failed to fetch hell data: ${(error as Error).message}`);
+                    if (config.onFail)
+                        instance.scheduleCommand({ type: 'hell', body: '地狱寻宝 10' });
                     return;
                 }
                 const levelData = this.levelData[level - 1];
