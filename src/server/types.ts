@@ -299,6 +299,7 @@ const HellConfigSchema = z.object({
     }).optional().describe('进入时刻'),
     maxLevel: z.number().optional().describe('最大攻击BOSS层数'),
     collect: z.boolean().optional().describe('自动收集'),
+    onFail: z.boolean().optional().describe('获取数据失败时十连寻宝')
 }).describe('地狱寻宝配置');
 
 const FortuneConfigSchema = z.object({
