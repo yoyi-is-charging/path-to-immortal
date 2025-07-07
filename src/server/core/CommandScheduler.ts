@@ -1,6 +1,7 @@
 // src/server/core/CommandScheduler.ts
 
 import { CommandFactory } from '../../commands/CommandFactory';
+import { logger } from '../../utils/logger';
 import { Command } from '../types';
 import { EventBus } from './EventBus';
 import { GameInstance } from './GameInstance';
@@ -92,6 +93,7 @@ export class CommandScheduler {
             });
         }
         catch (error) {
+            logger.error(`Failed to send command ${command.type} for accountId: ${this.instance.account.id}`, (error as Error).message);
             return this.sendCommand(command);
         }
     }
