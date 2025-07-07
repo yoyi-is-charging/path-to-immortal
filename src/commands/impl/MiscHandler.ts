@@ -402,7 +402,7 @@ export default class MiscHandler implements CommandHandler {
                     this.registerTypeScheduler(instance, command.type);
                 break;
             case 'misc_fight':
-                let nextTime = getDate({});
+                let nextTime = getDate({ dayOffset: 1 });
                 if (this.FIGHT_PATTERN.test(response) || this.FIGHT_FREQUENCY_PATTERN.test(response))
                     nextTime = new Date(Date.now() + 60 * 60 * 1000);
                 else if (this.FIGHT_NOT_AVAILABLE_PATTERN.test(response))
@@ -440,7 +440,7 @@ export default class MiscHandler implements CommandHandler {
                 if (!this.SIGNUP_FINISHED_PATTERN.test(response))
                     instance.updateStatus({ misc: { battleSignUp: { inProgress: true, isFinished: false, nextTime: getDate({ hours: new Date().getHours() + 1 }) } } });
                 else
-                    instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({}) } } });
+                    instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
         }
