@@ -251,18 +251,19 @@ export class GameInstance {
                 bytes_pb_reserve: elem.bytes_pb_reserve
             }
         }));
-        return fetch(this.sendParams.input, {
-            ...this.sendParams.init,
-            body: JSON.stringify(body),
-            credentials: 'include',
-        }).then((response) => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        })
-            .catch((error) => {
-                logger.error(`Error sending message: ${error.message}`);
-                throw error;
+        try {
+            const response = await fetch(this.sendParams.input, {
+                ...this.sendParams.init,
+                body: JSON.stringify(body),
+                credentials: 'include',
             });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            logger.error(`Error sending message: ${(error as Error).message}`);
+            throw error;
+        }
     }
 
     public async fetchResponses() {

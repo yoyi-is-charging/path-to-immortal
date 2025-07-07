@@ -41,7 +41,8 @@ export default class Fishing implements CommandHandler {
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        command = { ...command, body: instance.account.status.fishing?.inProgress ? '甩杆' : command.body, retries: (command.retries || 0) + 1 };
+        const body = instance.account.status.fishing?.inProgress ? (command.body === '甩杆' ? '拉杆' : '甩杆') : command.body;
+        command = { ...command, body, retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }
 
