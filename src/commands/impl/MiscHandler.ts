@@ -33,6 +33,7 @@ export default class MiscHandler implements CommandHandler {
         ['开始宗门任务', 'misc_sectTask'],
         ['任务选择', 'misc_sectTask'],
         ['大混战报名', 'misc_battleSignUp'],
+        ['扭蛋', 'misc_capsule'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['misc_signIn', /签到成功|今日已签到/],
@@ -56,6 +57,7 @@ export default class MiscHandler implements CommandHandler {
         ['misc_fight', /试剑(成功|失败|过了)|最多试剑25次|1小时内只能试剑1次|奖励后再来试剑/],
         ['misc_sectTask', /任务选择|每人每日任务次数|今日任务已全部完成|任务选择已过期/],
         ['misc_battleSignUp', /预计开打时间|当小时内已报名|当前小时的报名已截止|今日已经报名/],
+        ['misc_capsule', /扭蛋成功|扭蛋体力用完/]
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
     readonly SIGNUP_FINISHED_PATTERN = /今日已经报名/;
@@ -71,6 +73,7 @@ export default class MiscHandler implements CommandHandler {
     readonly FIGHT_SECT_PATTERN = /宗门切磋|切磋过了|没找到你要切磋的序号/;
     readonly FIGHT_MASTER_PATTERN = /师门切磋/;
     readonly CHALLENGE_SECT_PATTERN = /宗门挑战/;
+    readonly CAPSULE_FINISHED_PATTERN = /扭蛋体力用完/;
     readonly TASK_TYPE_PATTERN = /【(?<type>.+?)】/;
     readonly TASK_DATABASE = new Map([
         ['厨房帮工', new Map([
@@ -443,6 +446,12 @@ export default class MiscHandler implements CommandHandler {
                     instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
+            case 'misc_capsule':
+                instance.account.status.misc.capsule = instance.account.status.misc.capsule || {};
+                const inProgress = !this.CAPSULE_FINISHED_PATTERN.test(response);
+                instance.updateStatus({ misc: { capsule: { inProgress: inProgress, isFinished: !inProgress } } });
+                if (inProgress)
+                    instance.scheduleCommand({ type: 'misc_capsule', body: '扭蛋' }, 1000);
         }
     }
 
