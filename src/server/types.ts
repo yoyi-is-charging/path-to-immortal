@@ -180,6 +180,10 @@ const MiscStatusSchema = z.object({
         isFinished: z.boolean().optional().describe('已完成'),
         nextTime: z.coerce.date().optional().describe('下次报名时间'),
     }).optional().describe('大混战报名状态'),
+    capsule: z.object({
+        inProgress: z.boolean().optional().describe('进行中'),
+        isFinished: z.boolean().optional().describe('已完成'),
+    }).optional().describe('扭蛋状态'),
 }).describe('日常状态');
 
 export const StatusSchema = z.object({
