@@ -13,11 +13,13 @@ export default class Fishing implements CommandHandler {
         ['重新进入鱼塘', 'fishing'],
         ['甩杆', 'fishing'],
         ['拉杆', 'fishing'],
+        ['离开鱼塘', 'fishing'],
     ]);
-    readonly RESPONSE_PATTERN = /今日已进过鱼塘了|已离开鱼塘|已经重新进入|无法进入鱼塘|23点00分00秒|已进入鱼塘|预计[上咬]钩时间|鱼情好|太早了|离开鱼塘/;
+    readonly RESPONSE_PATTERN = /无法进入鱼塘|已进入鱼塘|预计[上咬]钩时间|鱼情好|离开鱼塘/;
     readonly POSITION_PATTERN = /位置(?<position>\d+):鱼情好/;
     readonly PULL_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly LEAVE_PATTERN = /发送指令:离开鱼塘/;
+    readonly FINISHED_PATTERN = /已离开鱼塘/;
     readonly BAIT_PATTERN = /饵料:-1\((?<bait>\d+)/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
@@ -34,14 +36,14 @@ export default class Fishing implements CommandHandler {
         } else if (this.LEAVE_PATTERN.test(response)) {
             instance.updateStatus({ fishing: { inProgress: true, bait: 0, position: undefined, pullTime: undefined } });
             instance.scheduleCommand({ type: 'fishing', body: '离开鱼塘' });
-        } else {
+        } else if (this.FINISHED_PATTERN.test(response)) {
             instance.updateStatus({ fishing: { inProgress: false, finishedCount: (instance.account.status.fishing.finishedCount || 0) + 1, bait: undefined, position: undefined, pullTime: undefined } });
             this.registerScheduler(instance);
         }
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        const body = instance.account.status.fishing?.inProgress ? (command.body === '甩杆' ? '拉杆' : '甩杆') : command.body;
+        const body = instance.account.status.fishing?.inProgress ? (command.body === '拉杆' ? '甩杆' : '拉杆') : command.body;
         command = { ...command, body, retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }
