@@ -56,6 +56,10 @@ export class CommandScheduler {
     }
 
     public async processCommand(command: Command) {
+        if (Date.now() < command.date!.getTime()) {
+            setTimeout(() => this.processCommand(command), command.date!.getTime() - Date.now());
+            return;
+        }
         const handler = CommandFactory.createHandler(command.type);
         try {
             const response = await this.sendCommand(command);
