@@ -15,7 +15,7 @@ export default class Fishing implements CommandHandler {
         ['拉杆', 'fishing'],
         ['离开鱼塘', 'fishing'],
     ]);
-    readonly RESPONSE_PATTERN = /无法进入鱼塘|已进入鱼塘|预计[上咬]钩时间|鱼情好|离开鱼塘/;
+    readonly RESPONSE_PATTERN = /无法进入鱼塘|预计[上咬]钩时间|鱼情好|离开鱼塘/;
     readonly POSITION_PATTERN = /位置(?<position>\d+):鱼情好/;
     readonly PULL_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly LEAVE_PATTERN = /发送指令:离开鱼塘/;
@@ -43,7 +43,7 @@ export default class Fishing implements CommandHandler {
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        const body = instance.account.status.fishing?.inProgress ? (command.body === '拉杆' ? '甩杆' : '拉杆') : command.body;
+        const body = (instance.account.status.fishing?.inProgress || command.body.toString().includes('进入鱼塘')) ? (command.body === '拉杆' ? '甩杆' : '拉杆') : command.body;
         command = { ...command, body, retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }
