@@ -57,6 +57,5 @@ export default class BountyHandler implements CommandHandler {
         if (!config.enabled)
             return;
         instance.scheduleCommand({ type: 'bounty', body: '查看宗门悬赏', date: status?.updateTime });
-
     }
 }
