@@ -24,12 +24,12 @@ export default class DreamlandHandler implements CommandHandler {
         instance.account.status.dreamland = instance.account.status.dreamland || {};
         if (this.LEVEL_PATTERN.test(response)) {
             const level = parseInt(response.match(this.LEVEL_PATTERN)!.groups!.level);
-            const monsterLevels: Array<number | undefined> = new Array(5).fill(undefined);
+            const monsterLevels: Array<number | null> = new Array(5).fill(null);
             response.match(this.MONSTER_LEVEL_PATTERN_GLOBAL)?.forEach((match) => {
                 const { monsterIndex, monsterLevel } = match.match(this.MONSTER_LEVEL_PATTERN)!.groups!;
                 monsterLevels[parseInt(monsterIndex) - 1] = parseInt(monsterLevel);
             });
-            const attackableMonsterIndex = monsterLevels.findIndex(monsterLevel => monsterLevel !== undefined && monsterLevel < level)!;
+            const attackableMonsterIndex = monsterLevels.findIndex(monsterLevel => monsterLevel !== null && monsterLevel < level)!;
             instance.updateStatus({ dreamland: { inProgress: true, isFinished: true, level, monsterLevels } });
             instance.scheduleCommand({ type: 'dreamland', body: `击杀幻兽 ${attackableMonsterIndex + 1}` }, 1000);
         } else if (this.DOOR_PATTERN.test(response)) {

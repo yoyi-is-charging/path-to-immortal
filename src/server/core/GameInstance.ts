@@ -87,7 +87,7 @@ export class GameInstance {
     private async linkLogin() {
         try {
             logger.info(`Attempting link login for accountId: ${this.account.id}`);
-            const loginLink = await this.page!.waitForSelector(`a[uin="${this.account.id}"][type="4"]`, { timeout: 5000 });
+            const loginLink = await this.page!.waitForSelector(`a[uin="${this.account.id}"][type="4"]`, { timeout: 15000 });
             await loginLink!.click();
             logger.info(`Waiting for navigation to ${this.baseUrl} for accountId: ${this.account.id}`);
             await this.page!.waitForURL(this.baseUrl, { waitUntil: 'domcontentloaded' });
@@ -355,7 +355,7 @@ export class GameInstance {
             fishing: { inProgress: false, finishedCount: 0 },
             wooding: { inProgress: false, finishedCount: 0 },
             hell: { inProgress: false, isFinished: false },
-            fortune: { occupation: false, realmDraw: false, levelDraw: false, realmWar: false, levelWar: false, sectWar: false },
+            fortune: { occupation: false, realmDraw: false, levelDraw: false, realmWar: false, levelWar: false, sectWar: false, daoWar: false, serverWar: false },
             misc: {
                 signIn: false,
                 sendEnergy: false,
