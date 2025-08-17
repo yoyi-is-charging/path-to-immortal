@@ -14,6 +14,8 @@ export default class FortuneHandler implements CommandHandler {
         ['加入战场', 'fortune_realmWar'],
         ['参加仙圣道战', 'fortune_levelWar'],
         ['参加宗门混战', 'fortune_sectWar'],
+        ['参加道道道战', 'fortune_daoWar'],
+        ['参加区战力', 'fortune_serverWar']
     ])
 
     readonly RESPONSE_PATTERN = new Map([
@@ -23,6 +25,8 @@ export default class FortuneHandler implements CommandHandler {
         ['fortune_levelWar', /[上中下]路/],
         ['fortune_realmWar', /已加入战场/],
         ['fortune_sectWar', /宗门最多上阵|本周已经参加过/],
+        ['fortune_daoWar', /已加入道道道战|号战场/],
+        ['fortune_serverWar', /已加入区战力/]
     ])
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
@@ -46,6 +50,12 @@ export default class FortuneHandler implements CommandHandler {
             case 'fortune_sectWar':
                 instance.updateStatus({ fortune: { sectWar: true } });
                 break;
+            case 'fortune_daoWar':
+                instance.updateStatus({ fortune: { daoWar: true } });
+                break;
+            case 'fortune_serverWar':
+                instance.updateStatus({ fortune: { serverWar: true } });
+                break;
         }
         this.registerTypeScheduler(instance, command.type);
     }
@@ -56,7 +66,7 @@ export default class FortuneHandler implements CommandHandler {
     }
 
     registerScheduler(instance: GameInstance): void {
-        ['fortune_occupation', 'fortune_realmDraw', 'fortune_levelDraw', 'fortune_realmWar', 'fortune_levelWar', 'fortune_sectWar'].forEach(type => this.registerTypeScheduler(instance, type));
+        ['fortune_occupation', 'fortune_realmDraw', 'fortune_levelDraw', 'fortune_realmWar', 'fortune_levelWar', 'fortune_sectWar', 'fortune_daoWar', 'fortune_serverWar'].forEach(type => this.registerTypeScheduler(instance, type));
     }
 
     registerTypeScheduler(instance: GameInstance, type: string): void {
@@ -83,6 +93,11 @@ export default class FortuneHandler implements CommandHandler {
             case 'fortune_sectWar':
                 instance.scheduleCommand({ type, body: `参加宗门混战`, date: getDate({ ...config.time, dayOffset: status?.sectWar ? 1 : 0 }) });
                 break;
+            case 'fortune_daoWar':
+                instance.scheduleCommand({ type, body: `参加道道道战 ${config.daoWar}`, date: getDate({ ...config.time, dayOffset: status?.daoWar ? 1 : 0 }) });
+                break;
+            case 'fortune_serverWar':
+                instance.scheduleCommand({ type, body: `参加区战力`, date: getDate({ ...config.time, dayOffset: status?.serverWar ? 1 : 0 }) });
         }
     }
 }

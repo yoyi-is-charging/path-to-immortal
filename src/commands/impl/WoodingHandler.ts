@@ -18,7 +18,7 @@ export default class WoodingHandler implements CommandHandler {
         ['确定出售给木商', 'wooding_sell'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
-        ['wooding', /已进入林场|已离开林场|无法进入林场|23点00分00秒|预计缺水时间|停止增长|砍伐完成|还未砍伐/],
+        ['wooding', /已进入林场|已离开林场|无法进入林场|预计缺水时间|停止增长|砍伐完成|还未砍伐/],
         ['wooding_priceInquiry', /我的木块|还没种过树/],
         ['wooding_sell', /确定要出售|出售完成/],
     ])

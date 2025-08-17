@@ -1,6 +1,6 @@
 // src/commands/impl/FishingHandler.ts
 
-import { Command } from '../../server/types';
+import { Command, MessageBody } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
 import { parseDate, getDate } from '../../utils/TimeUtils';
@@ -43,7 +43,8 @@ export default class Fishing implements CommandHandler {
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        const body = (instance.account.status.fishing?.inProgress || command.body.toString().includes('进入鱼塘')) ? (command.body === '拉杆' ? '甩杆' : '拉杆') : command.body;
+        const commandBody = (typeof command.body === 'string') ? command.body : (command.body as MessageBody)[0].str;
+        const body = (instance.account.status.fishing?.inProgress || commandBody.includes('进入鱼塘')) ? (commandBody === '拉杆' ? '甩杆' : '拉杆') : commandBody;
         command = { ...command, body, retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }

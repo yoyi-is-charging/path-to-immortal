@@ -96,7 +96,7 @@ const DreamlandStatusSchema = z.object({
     inProgress: z.boolean().optional().describe('进行中'),
     isFinished: z.boolean().optional().describe('已完成'),
     level: z.number().optional().describe('角色等级'),
-    monsterLevels: z.array(z.union([z.number(), z.undefined()])).optional().describe('怪物等级'),
+    monsterLevels: z.array(z.number().nullable()).optional().describe('怪物等级'),
     doorIndex: z.number().optional().describe('生门索引'),
 }).describe('幻境状态');
 
@@ -131,6 +131,8 @@ const FortuneStatusSchema = z.object({
     realmWar: z.boolean().optional().describe('三界战'),
     levelWar: z.boolean().optional().describe('仙圣道战'),
     sectWar: z.boolean().optional().describe('宗门混战'),
+    daoWar: z.boolean().optional().describe('道道道战'),
+    serverWar: z.boolean().optional().describe('区战力'),
 }).describe('气运争夺战状态');
 
 const MiscStatusSchema = z.object({
@@ -316,6 +318,7 @@ const FortuneConfigSchema = z.object({
     occupation: z.number().optional().describe('矿山索引'),
     realmWar: z.string().optional().describe('三界战位置'),
     levelWar: z.string().optional().describe('仙圣道战位置'),
+    daoWar: z.number().optional().describe('道道道战位置'),
 }).describe('气运争夺战配置');
 
 const MiscConfigSchema = z.object({
