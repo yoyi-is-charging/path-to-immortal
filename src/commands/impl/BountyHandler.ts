@@ -29,7 +29,7 @@ export default class BountyHandler implements CommandHandler {
         if (command.type === 'bounty') {
             const { accepted, limit } = response.match(this.ACCEPTED_LIMIT_PATTERN)!.groups!;
             const finished = accepted === limit;
-            const updateTime = finished ? getDate({ dayOffset: 1 }) : min(parseDate(response, this.UPDATE_TIME_PATTERN)!, getDate({ dayOffset: 1 }));
+            const updateTime = finished ? getDate({ ...config.time!, dayOffset: 1 }) : min(parseDate(response, this.UPDATE_TIME_PATTERN)!, getDate({ ...config.time!, dayOffset: 1 }));
             const claimTimes: Date[] = [];
             response.match(this.CLAIM_PATTERN_GLOBAL)?.forEach((match) => claimTimes.push(new Date()));
             response.match(this.TIME_LEFT_PATTERN_GLOBAL)?.forEach((match) => claimTimes.push(parseDate(match, this.TIME_LEFT_PATTERN)!));

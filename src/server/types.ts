@@ -115,6 +115,7 @@ const WoodingStatusSchema = z.object({
     price: z.number().optional().describe('当前木商价格'),
     amount: z.number().optional().describe('木块数量'),
     priceUpdateTime: z.coerce.date().optional().describe('价格更新时刻'),
+    friendPricesUpdateTime: z.coerce.date().optional().describe('友商报价更新时刻'),
 }).describe('种树状态');
 
 const HellStatusSchema = z.object({
@@ -243,6 +244,11 @@ const GardenConfigSchema = z.object({
 
 const BountyConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动悬赏'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('开始时刻'),
     bountyTypes: z.array(z.string()).optional().describe('悬赏类型'),
 }).describe('悬赏配置');
 
@@ -294,6 +300,7 @@ const WoodingConfigSchema = z.object({
     }).optional().describe('进入时刻'),
     levels: z.array(z.number()).optional().describe('林场等级'),
     minPrice: z.number().optional().describe('最低出售价格'),
+    friendPriceInquiryInterval: z.number().optional().describe('友商查询间隔时间（分钟）'),
 }).describe('种树配置');
 
 const HellConfigSchema = z.object({

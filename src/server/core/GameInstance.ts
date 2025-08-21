@@ -204,14 +204,16 @@ export class GameInstance {
                 this.page!.off('request', captureParamsHandler);
             }
         }
-
-        const locator = await this.page!.waitForSelector('[contenteditable="true"]');
-        await locator.fill('start');
-        const sendButton = await this.page!.waitForSelector('.g-button--primary.g-button--small.btn');
         this.page!.on('request', captureParamsHandler);
-        await sendButton.click();
+        const locator = await this.page!.waitForSelector('[contenteditable="true"]');
+        const sendButton = await this.page!.waitForSelector('.g-button--primary.g-button--small.btn');
+
+        const sendMessage = async () => {
+            await locator.fill('start');
+            await sendButton.click();
+        }
         await new Promise<void>((resolve) => {
-            const checkParamsCaptured = () => (sendParamsCaptured && receiveParamsCaptured) ? resolve() : setTimeout(checkParamsCaptured, 100);
+            const checkParamsCaptured = () => (sendParamsCaptured && receiveParamsCaptured) ? resolve() : (sendMessage(), setTimeout(checkParamsCaptured, 10000));
             checkParamsCaptured();
         });
         this.account.online = true;
