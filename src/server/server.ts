@@ -123,7 +123,13 @@ async function main() {
             broadcast('commandsUpdated', { id: accountId, scheduledCommands, pendingCommands });
         }
 
-        const notify: ({ chatId, message }: { chatId: string, message: string }) => void = ({ chatId, message }) => bot!.telegram.sendMessage(chatId, message);
+        const notify: ({ chatId, message }: { chatId: string, message: string }) => Promise<void> = async ({ chatId, message }) => {
+            try {
+                await bot!.telegram.sendMessage(chatId, message);
+            } catch (error) {
+                logger.error(`Failed to send message to ${chatId}: ${error}`);
+            }
+        }
 
         EventBus.on('statusUpdated', broadcastStatus);
         EventBus.on('commandScheduled', broadcastCommands);
