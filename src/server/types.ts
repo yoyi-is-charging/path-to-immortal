@@ -188,6 +188,11 @@ const MiscStatusSchema = z.object({
         isFinished: z.boolean().optional().describe('已完成'),
         nextTime: z.coerce.date().optional().describe('下次报名时间'),
     }).optional().describe('大混战报名状态'),
+    fightPet: z.object({
+        inProgress: z.boolean().optional().describe('进行中'),
+        isFinished: z.boolean().optional().describe('已完成'),
+        nextTime: z.coerce.date().optional().describe('下次切磋时间'),
+    }).optional().describe('灵宠对决状态'),
     capsule: z.object({
         inProgress: z.boolean().optional().describe('进行中'),
         isFinished: z.boolean().optional().describe('已完成'),
@@ -362,7 +367,14 @@ const MiscConfigSchema = z.object({
             str: z.string().optional().describe('试剑目标ID'),
             bytes_pb_reserve: z.string().optional().describe('试剑目标引用'),
         }).optional().describe('试剑目标'),
-    }).optional().describe('试剑配置')
+    }).optional().describe('试剑配置'),
+    fightPet: z.object({
+        enabled: z.boolean().optional().describe('启用灵宠对决'),
+        target: z.object({
+            str: z.string().optional().describe('灵宠对决目标ID'),
+            bytes_pb_reserve: z.string().optional().describe('灵宠对决目标引用'),
+        }).optional().describe('灵宠对决目标'),
+    }).optional().describe('灵宠对决配置'),
 }).describe('日常配置');
 
 export const ConfigSchema = z.object({
