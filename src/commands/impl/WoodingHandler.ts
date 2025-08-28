@@ -26,7 +26,7 @@ export default class WoodingHandler implements CommandHandler {
         ['wooding_sell', /确定要出售给门前的木商|出售完成/],
         ['wooding_priceInquiryFriend', /友商高报价/],
         ['wooding_sellFriend', /确定要出售给友友的木商|出售完成/],
-    ])
+    ]);
     readonly ENTER_PATTERN = /已进入林场|还未砍伐/;
     readonly WATER_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly STOP_GROWTH_PATTERN = /停止增长/;

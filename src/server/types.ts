@@ -136,6 +136,11 @@ const FortuneStatusSchema = z.object({
     serverWar: z.boolean().optional().describe('区战力'),
 }).describe('气运争夺战状态');
 
+const BagStatusSchema = z.object({
+    items: z.array(z.string()).optional().describe('物品种类'),
+    itemCounts: z.array(z.number()).optional().describe('物品数量'),
+}).describe('背包状态');
+
 const MiscStatusSchema = z.object({
     signIn: z.boolean().optional().describe('签到'),
     sendEnergy: z.boolean().optional().describe('送能量'),
@@ -201,6 +206,7 @@ export const StatusSchema = z.object({
     wooding: WoodingStatusSchema.optional(),
     hell: HellStatusSchema.optional(),
     fortune: FortuneStatusSchema.optional(),
+    bag: BagStatusSchema.optional(),
     misc: MiscStatusSchema.optional(),
 }).describe('账户状态');
 
@@ -328,6 +334,14 @@ const FortuneConfigSchema = z.object({
     daoWar: z.number().optional().describe('道道道战位置'),
 }).describe('气运争夺战配置');
 
+const BagConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用批量送道具'),
+    target: z.object({
+        str: z.string().optional().describe('批量送道具目标ID'),
+        bytes_pb_reserve: z.string().optional().describe('批量送道具目标引用'),
+    }).optional().describe('批量送道具目标'),
+}).describe('批量送道具配置');
+
 const MiscConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动日常'),
     time: z.object({
@@ -363,6 +377,7 @@ export const ConfigSchema = z.object({
     wooding: WoodingConfigSchema.optional(),
     hell: HellConfigSchema.optional(),
     fortune: FortuneConfigSchema.optional(),
+    bag: BagConfigSchema.optional(),
     misc: MiscConfigSchema.optional(),
 }).describe('自动化配置');
 
