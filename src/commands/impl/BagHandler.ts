@@ -52,10 +52,13 @@ export default class BagHandler implements CommandHandler {
 
     validateItems(instance: GameInstance) {
         const status = instance.account.status.bag!;
+        const config = instance.account.config.bag!;
         status.items = status.items!.map(item => item === '双休丹' ? '双修丹' : item);
         const items = Object.fromEntries(status.items!.map((item, index) => [item, status.itemCounts![index]]));
         for (const key of ['抽卡券', '妖兽令', '心法令', '宠物蛋'])
             delete items[key];
+        for (const reserved of config.reservedItems || [])
+            delete items[reserved];
         status.items = Object.keys(items);
         status.itemCounts = Object.values(items);
     }
