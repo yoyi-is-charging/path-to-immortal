@@ -33,6 +33,7 @@ export default class MiscHandler implements CommandHandler {
         ['开始宗门任务', 'misc_sectTask'],
         ['任务选择', 'misc_sectTask'],
         ['大混战报名', 'misc_battleSignUp'],
+        ['灵宠对决', 'misc_fightPet'],
         ['扭蛋', 'misc_capsule'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
@@ -61,7 +62,6 @@ export default class MiscHandler implements CommandHandler {
         ['misc_capsule', /扭蛋成功|扭蛋体力用完/],
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
-    readonly SIGNUP_FINISHED_PATTERN = /今日已经报名/;
     readonly KILL_PATTERN = /挑战一刀斩/;
     readonly CHALLENGE_COUNT_PATTERN = /剩余挑战次数:(?<count>\d+)/;
     readonly FORGE_LIMIT_PATTERN = /炼器上限/;
@@ -74,6 +74,8 @@ export default class MiscHandler implements CommandHandler {
     readonly FIGHT_SECT_PATTERN = /宗门切磋|切磋过了|没找到你要切磋的序号/;
     readonly FIGHT_MASTER_PATTERN = /师门切磋/;
     readonly CHALLENGE_SECT_PATTERN = /宗门挑战/;
+    readonly SIGNUP_FINISHED_PATTERN = /今日已经报名/;
+    readonly FIGHT_PET_FINISHED_PATTERN = /每天最多对决/;
     readonly CAPSULE_FINISHED_PATTERN = /扭蛋体力用完/;
     readonly TASK_TYPE_PATTERN = /【(?<type>.+?)】/;
     readonly TASK_DATABASE = new Map([
@@ -447,6 +449,14 @@ export default class MiscHandler implements CommandHandler {
                     instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
+            case 'misc_fightPet':
+                instance.account.status.misc.fightPet = instance.account.status.misc.fightPet || {};
+                if (!this.FIGHT_PET_FINISHED_PATTERN.test(response))
+                    instance.updateStatus({ misc: { fightPet: { inProgress: true, isFinished: false, nextTime: new Date(Date.now() + 10 * 60 * 1000) } } });
+                else
+                    instance.updateStatus({ misc: { fightPet: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
+                this.registerTypeScheduler(instance, command.type);
+                break;
             case 'misc_capsule':
                 instance.account.status.misc.capsule = instance.account.status.misc.capsule || {};
                 const inProgress = !this.CAPSULE_FINISHED_PATTERN.test(response);
@@ -462,7 +472,7 @@ export default class MiscHandler implements CommandHandler {
     }
 
     public registerScheduler(instance: GameInstance): void {
-        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
+        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
             this.registerTypeScheduler(instance, type));
     }
 
@@ -517,6 +527,10 @@ export default class MiscHandler implements CommandHandler {
                 break;
             case 'misc_battleSignUp':
                 instance.scheduleCommand({ type, body: '大混战报名', date: status?.battleSignUp?.isFinished ? getDate({ ...config.time, dayOffset: 1 }) : status?.battleSignUp?.nextTime });
+                break;
+            case 'misc_fightPet':
+                if (config.fightPet?.enabled)
+                    instance.scheduleCommand({ type, body: [{ str: '灵宠对决', bytes_pb_reserve: null }, { str: config.fightPet?.target?.str!, bytes_pb_reserve: config.fightPet?.target?.bytes_pb_reserve! }], date: status?.fightPet?.nextTime });
                 break;
             case 'misc_receiveEnergy':
                 instance.scheduleCommand({ type, body: '领道友能量', date: getDate({ ...config.timePost, dayOffset: status?.receiveEnergy ? 1 : 0 }) });
