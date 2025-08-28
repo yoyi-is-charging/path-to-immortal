@@ -76,7 +76,7 @@ export default class WoodingHandler implements CommandHandler {
             const amount = parseInt(response.match(this.WOOD_BLOCK_PATTERN)!.groups!.amount);
             const index = friendPrices.reduce((maxIndex, current, i) => {
                 const duration = parseInt(current.groups!.duration);
-                if (duration > 0 && (maxIndex == -1 || parseInt(current.groups!.price) > parseInt(friendPrices[maxIndex].groups!.price))) {
+                if (duration > 0 && (maxIndex === -1 || parseInt(current.groups!.price) > parseInt(friendPrices[maxIndex].groups!.price))) {
                     return i;
                 }
                 return maxIndex;
@@ -112,6 +112,8 @@ export default class WoodingHandler implements CommandHandler {
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
+        if (command.type === 'wooding_priceInquiryFriend')
+            command.date = new Date(Date.now() + (instance.account.config.wooding!.friendPriceInquiryInterval || 0) * 60 * 1000);
         command.retries = (command.retries || 0) + 1;
         return command.retries! < 3 ? command : undefined;
     }
