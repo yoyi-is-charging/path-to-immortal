@@ -33,7 +33,7 @@ export default class GardenHandler implements CommandHandler {
             if (this.RIPE_COUNT_PATTERN.test(response))
                 ripeCount = parseInt(response.match(this.RIPE_COUNT_PATTERN)!.groups!.ripeCount);
             instance.updateStatus({ garden: { ripen: { ripeCount } } });
-            instance.scheduleCommand({ type: 'garden', body: `一键种植 ${ripeCount > 0 ? config.ripen?.seedType : config.seedType}` });
+            instance.scheduleCommand({ type: 'garden', body: `一键种植 ${ripeCount > 0 ? config.ripen?.seedType : config.seedType} 1` });
         }
         if (command.type === 'garden') {
             if (this.FINISHED_PATTERN.test(response)) {
@@ -51,7 +51,7 @@ export default class GardenHandler implements CommandHandler {
             }
             instance.updateStatus({ garden: { inProgress, finishTime, noSeeds } });
             if (!inProgress && !noSeeds)
-                instance.scheduleCommand({ type: 'garden', body: `一键种植 ${config.seedType}` });
+                instance.scheduleCommand({ type: 'garden', body: `一键种植 ${config.seedType} 1` });
             if (inProgress)
                 instance.scheduleCommand({ type: 'garden', body: '收获', date: finishTime });
         }
