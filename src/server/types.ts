@@ -345,6 +345,7 @@ const BagConfigSchema = z.object({
         str: z.string().optional().describe('批量送道具目标ID'),
         bytes_pb_reserve: z.string().optional().describe('批量送道具目标引用'),
     }).optional().describe('批量送道具目标'),
+    reservedItems: z.array(z.string()).optional().describe('保留物品列表')
 }).describe('批量送道具配置');
 
 const MiscConfigSchema = z.object({
