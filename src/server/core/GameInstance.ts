@@ -149,6 +149,7 @@ export class GameInstance {
     public async init() {
         await this.context!.addCookies(this.account.session!);
 
+        let sendParamsCaptured = false;
         let receiveParamsCaptured = false;
 
         const filterInvalidHeaders = (headers: Record<string, string>) => {
@@ -164,12 +165,6 @@ export class GameInstance {
 
         const captureParamsHandler = async (request: Request) => {
             const url = request.url();
-            // find request with header 'x-turing-signature'
-            const xTuringSignature = request.headers()['x-turing-signature'];
-            if (xTuringSignature) {
-                logger.info(`Capturing x-turing-signature for url: ${url}`);
-                logger.info(`Captured x-turing-signature for accountId: ${this.account.id}`);
-            }
             if (url.includes('HandleProcess1?tinyidList')) {
                 logger.info(`Capturing tinyID for accountId: ${this.account.id}`);
                 const body = JSON.parse(request.postData() || '{}');
@@ -177,7 +172,6 @@ export class GameInstance {
                 this.tinyID = body.tinyid_list?.[0] || null;
                 if (this.tinyID === null) {
                     logger.error(`Failed to capture tinyID for accountId: ${this.account.id}`);
-                    // refresh page to retry
                     await this.page!.reload({ waitUntil: 'domcontentloaded' });
                 }
             }
@@ -191,8 +185,6 @@ export class GameInstance {
                     }
                 }
                 receiveParamsCaptured = true;
-            }
-            if (receiveParamsCaptured && this.tinyID != null) {
                 var body = JSON.parse(this.receiveParams.init.body as string);
                 this.sendParams = {
                     input: url.replace('cmd0x907e.Cmd0x907e/HandleProcess?msg=1&polling&', 'msgproxy.sendmsg/HandleProcess?'),
@@ -205,7 +197,7 @@ export class GameInstance {
                                     routing_head: {
                                         guild_id: body.get_channel_msg_req.rpt_channel_params[0].guild_id,
                                         channel_id: body.get_channel_msg_req.rpt_channel_params[0].channel_id,
-                                        from_tinyid: this.tinyID.toString(),
+                                        from_tinyid: null,
                                         direct_message_flag: 0
                                     },
                                     content_head: {
@@ -222,12 +214,20 @@ export class GameInstance {
                         })
                     }
                 }
+            }
+            if (receiveParamsCaptured && this.tinyID != null) {
+                this.page!.off('request', captureParamsHandler);
                 let headers = this.sendParams.init.headers as Record<string, string>;
                 headers['x-oidb'] = "{\"uint32_service_type\":\"0\"}";
-                headers['x-turing-signature'] = "eyJzaWduIjoibUJoOHRuZkJ6czRHM0VNTGpMUGV1MGVxR2dnPSIsIm5vbmNlIjoiMDllMzAwNTk0ZGY5NDNlMDk1Zjg1ZmIzM2VmNGU4NjkiLCJ0aW1lc3RhbXAiOjE3NTczMzQ1Mjg1NTYsInRva2VuIjoiLTE3MTgwMzk2OTpBWGVQRmw4QW94WFluMTRhbGRFdldZVjVRYWhycGRxTGxLRkI1d2xScyszTmZDVVRoOGxaMXdmTlhTSXpyNlNQQ295WFh0NS81alVmRDIvaEJWMExNZ0dYbUwrRGEzaE44bGpMLzcxdFNOdzNSV1pOZUQ3NUZiQlYwZDQvMjVjRmhVRFFWQzBibEk2ZnhQMStCYWE0ZUdrPSIsInNpZ25NZXRob2QiOiJIbWFjU0hBMSJ9";
+                await this.page?.waitForFunction(() => (window as any)._TDID && typeof (window as any)._TDID.signData === 'function', { timeout: 15000 });
+                const signature = await this.page!.evaluate(() => (window as any)._TDID.signData(0));
+                headers['x-turing-signature'] = signature;
                 this.sendParams.init.headers = headers;
+                let body = JSON.parse(this.sendParams.init.body as string);
+                body.msg.head.routing_head.from_tinyid = this.tinyID;
+                this.sendParams.init.body = JSON.stringify(body);
                 logger.info(`TinyID and receive parameters captured for accountId: ${this.account.id}`);
-                this.page!.off('request', captureParamsHandler);
+                sendParamsCaptured = true;
             }
         }
 
@@ -235,7 +235,7 @@ export class GameInstance {
         await this.page!.goto(this.channelUrl, { waitUntil: 'domcontentloaded' });
 
         await new Promise<void>((resolve) => {
-            const checkParamsCaptured = () => (receiveParamsCaptured && this.tinyID != null) ? resolve() : setTimeout(checkParamsCaptured, 1000);
+            const checkParamsCaptured = () => (receiveParamsCaptured && sendParamsCaptured) ? resolve() : setTimeout(() => checkParamsCaptured(), 1000);
             checkParamsCaptured();
         });
         this.account.online = true;
