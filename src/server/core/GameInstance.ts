@@ -148,7 +148,6 @@ export class GameInstance {
 
     public async init() {
         await this.context!.addCookies(this.account.session!);
-        await this.page!.goto(this.channelUrl, { waitUntil: 'domcontentloaded' });
 
         let sendParamsCaptured = false;
         let receiveParamsCaptured = false;
@@ -166,27 +165,15 @@ export class GameInstance {
 
         const captureParamsHandler = async (request: Request) => {
             const url = request.url();
-            if (url.includes('sendmsg/HandleProcess')) {
+            if (url.includes('HandleProcess1?tinyidList')) {
+                logger.info(`Capturing tinyID for accountId: ${this.account.id}`);
                 const body = JSON.parse(request.postData() || '{}');
-                if (body.msg?.head?.routing_head?.from_tinyid === undefined)
-                    return;
-                this.sendParams = {
-                    input: url,
-                    init: {
-                        method: request.method(),
-                        headers: filterInvalidHeaders(await request.allHeaders()),
-                        body: request.postData()
-                    }
+                logger.info(`Captured tinyID body: ${JSON.stringify(body)}`);
+                this.tinyID = body.tinyid_list?.[0] || null;
+                if (this.tinyID === null) {
+                    logger.error(`Failed to capture tinyID for accountId: ${this.account.id}`);
+                    await this.page!.reload({ waitUntil: 'domcontentloaded' });
                 }
-                this.tinyID = body.msg.head.routing_head.from_tinyid;
-                const bytes_pb_reserve = body.msg.body.rich_text.elems.find((elem: any) => elem.text.bytes_pb_reserve !== null)?.text.bytes_pb_reserve;
-                if (this.account.status.personalInfo?.bytes_pb_reserve === undefined && bytes_pb_reserve !== undefined)
-                    this.updateStatus({ personalInfo: { bytes_pb_reserve } });
-                if (this.account.status.personalInfo?.bytes_pb_reserve === undefined) {
-                    await locator.evaluate((el: HTMLElement, content: string) => el.innerHTML = content, `<span data-nick-name="又一充电中" data-tiny-id="${this.tinyID}" data-at-type="1">@又一充电中</span>`);
-                    await sendButton.click();
-                } else
-                    sendParamsCaptured = true;
             }
             if (url.includes('HandleProcess?msg=1&polling')) {
                 this.receiveParams = {
@@ -198,22 +185,57 @@ export class GameInstance {
                     }
                 }
                 receiveParamsCaptured = true;
+                var body = JSON.parse(this.receiveParams.init.body as string);
+                this.sendParams = {
+                    input: url.replace('cmd0x907e.Cmd0x907e/HandleProcess?msg=1&polling&', 'msgproxy.sendmsg/HandleProcess?'),
+                    init: {
+                        method: request.method(),
+                        headers: filterInvalidHeaders(await request.allHeaders()),
+                        body: JSON.stringify({
+                            msg: {
+                                head: {
+                                    routing_head: {
+                                        guild_id: body.get_channel_msg_req.rpt_channel_params[0].guild_id,
+                                        channel_id: body.get_channel_msg_req.rpt_channel_params[0].channel_id,
+                                        from_tinyid: null,
+                                        direct_message_flag: 0
+                                    },
+                                    content_head: {
+                                        msg_type: "3840", // NormalMsg
+                                        random: Date.now().toString()
+                                    }
+                                },
+                                body: {
+                                    rich_text: {
+                                        elems: []
+                                    }
+                                }
+                            }
+                        })
+                    }
+                }
             }
-            if (sendParamsCaptured && receiveParamsCaptured) {
-                logger.info(`Send and receive parameters captured for accountId: ${this.account.id}`);
+            if (receiveParamsCaptured && this.tinyID != null) {
                 this.page!.off('request', captureParamsHandler);
+                let headers = this.sendParams.init.headers as Record<string, string>;
+                headers['x-oidb'] = "{\"uint32_service_type\":\"0\"}";
+                await this.page?.waitForFunction(() => (window as any)._TDID && typeof (window as any)._TDID.signData === 'function', { timeout: 30000 });
+                const signature = await this.page!.evaluate(() => (window as any)._TDID.signData(0));
+                headers['x-turing-signature'] = signature;
+                this.sendParams.init.headers = headers;
+                let body = JSON.parse(this.sendParams.init.body as string);
+                body.msg.head.routing_head.from_tinyid = this.tinyID;
+                this.sendParams.init.body = JSON.stringify(body);
+                logger.info(`TinyID and receive parameters captured for accountId: ${this.account.id}`);
+                sendParamsCaptured = true;
             }
         }
-        this.page!.on('request', captureParamsHandler);
-        const locator = await this.page!.waitForSelector('[contenteditable="true"]');
-        const sendButton = await this.page!.waitForSelector('.g-button--primary.g-button--small.btn');
 
-        const sendMessage = async () => {
-            await locator.fill('start');
-            await sendButton.click();
-        }
+        this.page!.on('request', captureParamsHandler);
+        await this.page!.goto(this.channelUrl, { waitUntil: 'domcontentloaded' });
+
         await new Promise<void>((resolve) => {
-            const checkParamsCaptured = () => (sendParamsCaptured && receiveParamsCaptured) ? resolve() : (sendMessage(), setTimeout(checkParamsCaptured, 10000));
+            const checkParamsCaptured = () => (receiveParamsCaptured && sendParamsCaptured) ? resolve() : setTimeout(() => checkParamsCaptured(), 1000);
             checkParamsCaptured();
         });
         this.account.online = true;
@@ -253,10 +275,10 @@ export class GameInstance {
                 bytes_pb_reserve: elem.bytes_pb_reserve
             }
         }));
+        this.sendParams.init.body = JSON.stringify(body);
         try {
             const response = await fetch(this.sendParams.input, {
                 ...this.sendParams.init,
-                body: JSON.stringify(body),
                 credentials: 'include',
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
