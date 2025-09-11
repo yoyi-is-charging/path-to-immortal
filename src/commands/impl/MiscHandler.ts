@@ -34,14 +34,14 @@ export default class MiscHandler implements CommandHandler {
         ['任务选择', 'misc_sectTask'],
         ['大混战报名', 'misc_battleSignUp'],
         ['灵宠对决', 'misc_fightPet'],
-        ['扭蛋', 'misc_capsule'],
+        ['地狱寻宝', 'misc_hell'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['misc_signIn', /签到成功|今日已签到/],
         ['misc_sectSignIn', /宗门签到成功|今日已宗门签到/],
         ['misc_sendEnergy', /送能量成功|已送过能量/],
         ['misc_receiveEnergy', /领道友能量成功|没有可领取的能量/],
-        ['misc_abode', /领取每日能量成功|已领过能量|我的洞府|能量不足/],
+        ['misc_abode', /领取每日能量成功|已领过能量|我的洞府|能量不足|没有能量/],
         ['misc_transmission', /传功成功|已经传功|无法传功/],
         ['misc_receiveTransmission', /已接收传功|接受传功成功|还没有传功/],
         ['misc_receiveTaskReward', /领取任务奖励成功|暂无可领取的任务奖励/],
@@ -59,7 +59,7 @@ export default class MiscHandler implements CommandHandler {
         ['misc_sectTask', /任务选择|每人每日任务次数|今日任务已全部完成|任务选择已过期/],
         ['misc_battleSignUp', /预计开打时间|当小时内已报名|当前小时的报名已截止|今日已经报名/],
         ['misc_fightPet', /对决开始|灵宠只能对决|每天最多对决/],
-        ['misc_capsule', /扭蛋成功|扭蛋体力用完/],
+        ['misc_hell', /地狱寻宝 10|府石已领取/],
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
     readonly KILL_PATTERN = /挑战一刀斩/;
@@ -76,7 +76,7 @@ export default class MiscHandler implements CommandHandler {
     readonly CHALLENGE_SECT_PATTERN = /宗门挑战/;
     readonly SIGNUP_FINISHED_PATTERN = /今日已经报名/;
     readonly FIGHT_PET_FINISHED_PATTERN = /每天最多对决/;
-    readonly CAPSULE_FINISHED_PATTERN = /扭蛋体力用完/;
+    readonly HELL_FINISHED_PATTERN = /府石已领取/;
     readonly TASK_TYPE_PATTERN = /【(?<type>.+?)】/;
     readonly TASK_DATABASE = new Map([
         ['厨房帮工', new Map([
@@ -457,12 +457,14 @@ export default class MiscHandler implements CommandHandler {
                     instance.updateStatus({ misc: { fightPet: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
-            case 'misc_capsule':
-                instance.account.status.misc.capsule = instance.account.status.misc.capsule || {};
-                const inProgress = !this.CAPSULE_FINISHED_PATTERN.test(response);
-                instance.updateStatus({ misc: { capsule: { inProgress: inProgress, isFinished: !inProgress } } });
-                if (inProgress)
-                    instance.scheduleCommand({ type: 'misc_capsule', body: '扭蛋' }, 1000);
+            case 'misc_hell':
+                instance.account.status.misc.hell = instance.account.status.misc.hell || {};
+                if (!this.HELL_FINISHED_PATTERN.test(response))
+                    instance.updateStatus({ misc: { hell: { inProgress: true, isFinished: false } } });
+                else
+                    instance.updateStatus({ misc: { hell: { inProgress: false, isFinished: true } } });
+                this.registerTypeScheduler(instance, command.type);
+                break;
         }
     }
 
@@ -472,7 +474,7 @@ export default class MiscHandler implements CommandHandler {
     }
 
     public registerScheduler(instance: GameInstance): void {
-        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
+        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_hell', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
             this.registerTypeScheduler(instance, type));
     }
 
@@ -531,6 +533,9 @@ export default class MiscHandler implements CommandHandler {
             case 'misc_fightPet':
                 if (config.fightPet?.enabled)
                     instance.scheduleCommand({ type, body: [{ str: '灵宠对决', bytes_pb_reserve: null }, { str: config.fightPet?.target?.str!, bytes_pb_reserve: config.fightPet?.target?.bytes_pb_reserve! }], date: status?.fightPet?.nextTime });
+                break;
+            case 'misc_hell':
+                instance.scheduleCommand({ type, body: '地狱寻宝 10', date: getDate({ ...config.time, dayOffset: status?.hell?.isFinished ? 1 : 0 }) });
                 break;
             case 'misc_receiveEnergy':
                 instance.scheduleCommand({ type, body: '领道友能量', date: getDate({ ...config.timePost, dayOffset: status?.receiveEnergy ? 1 : 0 }) });

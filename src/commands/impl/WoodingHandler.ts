@@ -19,6 +19,7 @@ export default class WoodingHandler implements CommandHandler {
         ['友商报价', 'wooding_priceInquiryFriend'],
         ['出售给友商', 'wooding_sellFriend'],
         ['确定出售给友商', 'wooding_sellFriend'],
+        ['领木商能量', 'wooding_receiveEnergy'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['wooding', /已进入林场|已离开林场|无法进入林场|预计缺水时间|停止增长|砍伐完成|还未砍伐/],
@@ -26,6 +27,7 @@ export default class WoodingHandler implements CommandHandler {
         ['wooding_sell', /确定要出售给门前的木商|出售完成/],
         ['wooding_priceInquiryFriend', /友商高报价/],
         ['wooding_sellFriend', /确定要出售给友友的木商|出售完成/],
+        ['wooding_receiveEnergy', /还没有获得木商能量|领木商能量成功/],
     ]);
     readonly ENTER_PATTERN = /已进入林场|还未砍伐/;
     readonly WATER_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
@@ -109,6 +111,10 @@ export default class WoodingHandler implements CommandHandler {
             if (isSelling)
                 instance.scheduleCommand({ type: 'wooding_sellFriend', body: '确定出售给友商' });
         }
+        if (command.type === 'wooding_receiveEnergy') {
+            instance.updateStatus({ wooding: { energyReceived: true } });
+            this.registerTypeScheduler(instance, 'wooding_receiveEnergy');
+        }
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -119,7 +125,7 @@ export default class WoodingHandler implements CommandHandler {
     }
 
     registerScheduler(instance: GameInstance): void {
-        ['wooding', 'wooding_priceInquiry', 'wooding_priceInquiryFriend'].forEach(type => this.registerTypeScheduler(instance, type));
+        ['wooding', 'wooding_priceInquiry', 'wooding_priceInquiryFriend', 'wooding_receiveEnergy'].forEach(type => this.registerTypeScheduler(instance, type));
     }
 
     registerTypeScheduler(instance: GameInstance, type: string): void {
@@ -143,6 +149,11 @@ export default class WoodingHandler implements CommandHandler {
                 break;
             case 'wooding_priceInquiryFriend':
                 instance.scheduleCommand({ type: 'wooding_priceInquiryFriend', body: '友商报价', date: status?.friendPricesUpdateTime });
+                break;
+            case 'wooding_receiveEnergy':
+                if (!config.enabled)
+                    break;
+                instance.scheduleCommand({ type: 'wooding_receiveEnergy', body: '领木商能量', date: getDate({ ...config.energyReceiveTime, dayOffset: status?.energyReceived ? 1 : 0 }) });
         }
     }
 }
