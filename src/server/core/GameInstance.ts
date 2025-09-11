@@ -378,7 +378,6 @@ export class GameInstance {
             dreamland: { inProgress: false, isFinished: false },
             fishing: { inProgress: false, finishedCount: 0 },
             wooding: { inProgress: false, finishedCount: 0 },
-            hell: { inProgress: false, isFinished: false },
             fortune: { occupation: false, realmDraw: false, levelDraw: false, realmWar: false, levelWar: false, sectWar: false, daoWar: false, serverWar: false },
             misc: {
                 signIn: false,
@@ -397,6 +396,8 @@ export class GameInstance {
                 fight: { randomCount: 0, masterCount: 0, challengeSectCount: 0, sectCount: 0 },
                 sect: { signIn: false, task: { inProgress: false, isFinished: false } },
                 battleSignUp: { inProgress: false, isFinished: false },
+                fightPet: { inProgress: false, isFinished: false, nextTime: undefined },
+                hell: { inProgress: false, isFinished: false },
             }
         })
     }

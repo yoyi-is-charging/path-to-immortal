@@ -116,14 +116,8 @@ const WoodingStatusSchema = z.object({
     amount: z.number().optional().describe('木块数量'),
     priceUpdateTime: z.coerce.date().optional().describe('价格更新时刻'),
     friendPricesUpdateTime: z.coerce.date().optional().describe('友商报价更新时刻'),
+    energyReceived: z.boolean().optional().describe('已领取木商能量'),
 }).describe('种树状态');
-
-const HellStatusSchema = z.object({
-    inProgress: z.boolean().optional().describe('进行中'),
-    isFinished: z.boolean().optional().describe('已完成'),
-    level: z.number().optional().describe('当前层数'),
-    collected: z.boolean().optional().describe('已收集府石'),
-}).describe('地狱寻宝状态');
 
 const FortuneStatusSchema = z.object({
     occupation: z.boolean().optional().describe('占领矿山'),
@@ -193,11 +187,21 @@ const MiscStatusSchema = z.object({
         isFinished: z.boolean().optional().describe('已完成'),
         nextTime: z.coerce.date().optional().describe('下次切磋时间'),
     }).optional().describe('灵宠对决状态'),
+    hell: z.object({
+        inProgress: z.boolean().optional().describe('进行中'),
+        isFinished: z.boolean().optional().describe('已完成'),
+    }).optional().describe('地狱寻宝状态'),
+}).describe('日常状态');
+
+const EventStatusSchema = z.object({
     capsule: z.object({
         inProgress: z.boolean().optional().describe('进行中'),
         isFinished: z.boolean().optional().describe('已完成'),
     }).optional().describe('扭蛋状态'),
-}).describe('日常状态');
+    trial: z.object({
+        count: z.number().optional().describe('接受考验次数'),
+    }).optional().describe('接受考验状态'),
+}).describe('活动状态');
 
 export const StatusSchema = z.object({
     personalInfo: PersonalInfoSchema.optional(),
@@ -209,10 +213,10 @@ export const StatusSchema = z.object({
     dreamland: DreamlandStatusSchema.optional(),
     fishing: FishingStatusSchema.optional(),
     wooding: WoodingStatusSchema.optional(),
-    hell: HellStatusSchema.optional(),
     fortune: FortuneStatusSchema.optional(),
     bag: BagStatusSchema.optional(),
     misc: MiscStatusSchema.optional(),
+    event: EventStatusSchema.optional(),
 }).describe('账户状态');
 
 export type Status = z.infer<typeof StatusSchema>;
@@ -312,19 +316,12 @@ const WoodingConfigSchema = z.object({
     levels: z.array(z.number()).optional().describe('林场等级'),
     minPrice: z.number().optional().describe('最低出售价格'),
     friendPriceInquiryInterval: z.number().optional().describe('友商查询间隔时间（分钟）'),
-}).describe('种树配置');
-
-const HellConfigSchema = z.object({
-    enabled: z.boolean().optional().describe('启用自动地狱寻宝'),
-    time: z.object({
+    energyReceiveTime: z.object({
         hours: z.number().min(0).max(23).optional(),
         minutes: z.number().min(0).max(59).optional(),
         seconds: z.number().min(0).max(59).optional(),
-    }).optional().describe('进入时刻'),
-    maxLevel: z.number().optional().describe('最大攻击BOSS层数'),
-    collect: z.boolean().optional().describe('自动收集'),
-    onFail: z.boolean().optional().describe('获取数据失败时十连寻宝')
-}).describe('地狱寻宝配置');
+    }).optional().describe('领取木商能量时间'),
+}).describe('种树配置');
 
 const FortuneConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动气运争夺战'),
@@ -388,7 +385,6 @@ export const ConfigSchema = z.object({
     dreamland: DreamlandConfigSchema.optional(),
     fishing: FishingConfigSchema.optional(),
     wooding: WoodingConfigSchema.optional(),
-    hell: HellConfigSchema.optional(),
     fortune: FortuneConfigSchema.optional(),
     bag: BagConfigSchema.optional(),
     misc: MiscConfigSchema.optional(),
