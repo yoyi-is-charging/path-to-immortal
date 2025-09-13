@@ -61,11 +61,12 @@ export class CommandScheduler {
             return;
         }
         const handler = CommandFactory.createHandler(command.type);
+        let response = 'response uncaptured';
         try {
-            const response = await this.sendCommand(command);
+            response = await this.sendCommand(command);
             await handler.handleResponse(command, response, this.instance);
         } catch (error) {
-            EventBus.emit('commandFailed', { accountId: this.instance.account.id, command, error: (error as Error).message });
+            EventBus.emit('commandFailed', { accountId: this.instance.account.id, command, error: (error as Error).message, response });
             const newCommand = await handler.handleError(command, error as Error, this.instance);
             if (newCommand)
                 this.instance.scheduleCommand(newCommand);
