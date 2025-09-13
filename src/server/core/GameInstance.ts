@@ -309,8 +309,7 @@ export class GameInstance {
                 if (begIndex === 0 && endIndex === 0)
                     return;
                 for (let i = begIndex; i <= endIndex; ++i) {
-                    const content = Buffer.from(msg.rpt_msgs[endIndex - i], 'base64').toString('utf-8').normalize("NFKC");
-                    const response = this.validateAndParseResponse(content);
+                    const response = await this.validateAndParseResponse(msg, endIndex - i);
                     if (response && i > this.lastMessageIndex)
                         this.scheduler!.processResponse(response), this.lastMessageIndex = i;
                 }
@@ -346,10 +345,28 @@ export class GameInstance {
         EventBus.emit('fetchScheduled', { accountId: this.account.id, timestamp });
     }
 
-    private validateAndParseResponse(content: string): string | null {
+    private async validateAndParseResponse(msg: any, index: number): Promise<string | null> {
+        const content = Buffer.from(msg.rpt_msgs[index], 'base64').toString('utf-8').normalize("NFKC");
+        let result = '';
         if (!content.includes(this.tinyID!))
             return null;
-        return content.match(new RegExp(`(?<=${this.tinyID!}\\))[\\s\\S]*`))?.[0] || null;
+        const jsonContent = Buffer.from(msg.rpt_json_msgs[index], 'base64').toString('utf-8');
+        try {
+            const json = JSON.parse(jsonContent);
+            const elems = json.body.rich_text.elems;
+            for (const elem of elems) {
+                if (elem.text?.bytes_pb_reserve && !this.account.status.personalInfo?.bytes_pb_reserve)
+                    await this.updateStatus({ personalInfo: { str: Buffer.from(elem.text.str, 'base64').toString('utf-8'), bytes_pb_reserve: elem.text.bytes_pb_reserve } });
+                if (elem.text?.bytes_pb_reserve)
+                    result += '@{user_id}';
+                else if (elem.text?.str)
+                    result += Buffer.from(elem.text.str, 'base64').toString('utf-8').normalize("NFKC");
+            }
+        } catch (error) {
+            console.error('Failed to extract elements:', error);
+            return null;
+        }
+        return result;
     }
 
     public async updateStatus(status: Partial<Status>) {
@@ -398,6 +415,10 @@ export class GameInstance {
                 battleSignUp: { inProgress: false, isFinished: false },
                 fightPet: { inProgress: false, isFinished: false, nextTime: undefined },
                 hell: { inProgress: false, isFinished: false },
+            },
+            event: {
+                capsule: { inProgress: false, isFinished: false },
+                trial: { count: 0 }
             }
         })
     }
