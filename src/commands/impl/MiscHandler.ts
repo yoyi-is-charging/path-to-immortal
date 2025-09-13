@@ -59,7 +59,7 @@ export default class MiscHandler implements CommandHandler {
         ['misc_sectTask', /任务选择|每人每日任务次数|今日任务已全部完成|任务选择已过期/],
         ['misc_battleSignUp', /预计开打时间|当小时内已报名|当前小时的报名已截止|今日已经报名/],
         ['misc_fightPet', /对决开始|灵宠只能对决|每天最多对决/],
-        ['misc_hell', /地狱寻宝 10|府石已领取/],
+        ['misc_hell', /寻宝位置|已领过寻宝府石/],
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
     readonly KILL_PATTERN = /挑战一刀斩/;
@@ -76,7 +76,7 @@ export default class MiscHandler implements CommandHandler {
     readonly CHALLENGE_SECT_PATTERN = /宗门挑战/;
     readonly SIGNUP_FINISHED_PATTERN = /今日已经报名/;
     readonly FIGHT_PET_FINISHED_PATTERN = /每天最多对决/;
-    readonly HELL_FINISHED_PATTERN = /府石已领取/;
+    readonly HELL_FINISHED_PATTERN = /府石已领取|已领过寻宝府石/;
     readonly TASK_TYPE_PATTERN = /【(?<type>.+?)】/;
     readonly TASK_DATABASE = new Map([
         ['厨房帮工', new Map([
