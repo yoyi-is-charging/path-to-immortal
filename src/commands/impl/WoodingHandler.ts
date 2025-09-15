@@ -4,7 +4,6 @@ import { Command } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
 import { parseDate, getDate } from '../../utils/TimeUtils';
-import { EventBus } from '../../server/core/EventBus';
 
 
 export default class WoodingHandler implements CommandHandler {
@@ -67,8 +66,6 @@ export default class WoodingHandler implements CommandHandler {
             instance.updateStatus({ wooding: { price, amount, priceUpdateTime } });
             instance.scheduleCommand({ type: 'wooding_priceInquiry', body: '我的树木', date: priceUpdateTime });
             if (config.minPrice && price >= config.minPrice) {
-                if (process.env.BOT_CHAT_ID)
-                    EventBus.emit('notification', { chatId: process.env.BOT_CHAT_ID, message: `木块价格已达到 ${price}，请及时出售` });
                 if (amount >= this.AMOUNT_THRESHOLD)
                     instance.scheduleCommand({ type: 'wooding_sell', body: `出售给木商 ${amount}` });
             }
@@ -89,8 +86,6 @@ export default class WoodingHandler implements CommandHandler {
                 if (config.minPrice && parseInt(price) >= config.minPrice) {
                     const pattern = new RegExp(`友${id}.*出售给友商 数量 (?<reference>\\d+)0`);
                     const reference = response.match(pattern)!.groups!.reference;
-                    if (process.env.BOT_CHAT_ID)
-                        EventBus.emit('notification', { chatId: process.env.BOT_CHAT_ID, message: `友商${id} (uid:${reference}) 的木块报价已达到 ${price}，请及时出售` });
                     if (amount >= this.AMOUNT_THRESHOLD)
                         instance.scheduleCommand({ type: 'wooding_sellFriend', body: `出售给友商 ${amount} ${reference}` });
                 }
