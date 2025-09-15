@@ -361,6 +361,8 @@ export class GameInstance {
                     result += '@{user_id}';
                 else if (elem.text?.str)
                     result += Buffer.from(elem.text.str, 'base64').toString('utf-8').normalize("NFKC");
+                else if (elem.common_elem?.uint32_service_type === 46)
+                    result += Buffer.from(elem.common_elem.bytes_pb_elem, 'base64').toString('utf-8').normalize("NFKC");
             }
         } catch (error) {
             console.error('Failed to extract elements:', error);
