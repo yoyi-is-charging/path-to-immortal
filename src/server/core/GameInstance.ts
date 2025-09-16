@@ -396,7 +396,7 @@ export class GameInstance {
             zoo: { inProgress: false, isFinished: false },
             dreamland: { inProgress: false, isFinished: false },
             fishing: { inProgress: false, finishedCount: 0 },
-            wooding: { inProgress: false, finishedCount: 0 },
+            wooding: { inProgress: false, finishedCount: 0, energyReceived: false },
             fortune: { occupation: false, realmDraw: false, levelDraw: false, realmWar: false, levelWar: false, sectWar: false, daoWar: false, serverWar: false },
             misc: {
                 signIn: false,
