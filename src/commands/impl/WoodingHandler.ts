@@ -108,6 +108,7 @@ export default class WoodingHandler implements CommandHandler {
         }
         if (command.type === 'wooding_receiveEnergy') {
             instance.updateStatus({ wooding: { energyReceived: true } });
+            instance.scheduleCommand({ type: 'misc_abode', body: '全部转动' });
             this.registerTypeScheduler(instance, 'wooding_receiveEnergy');
         }
     }
