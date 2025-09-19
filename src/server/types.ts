@@ -201,6 +201,14 @@ const EventStatusSchema = z.object({
     trial: z.object({
         count: z.number().optional().describe('接受考验次数'),
     }).optional().describe('接受考验状态'),
+    senior: z.object({
+        currentPosition: z.object({
+            x: z.number().min(0).max(4).optional().describe('当前X坐标'),
+            y: z.number().min(0).max(4).optional().describe('当前Y坐标'),
+        }).optional().describe('当前坐标'),
+        monsterDefeated: z.boolean().optional().describe('是否已击败魔物'),
+        isFinished: z.boolean().optional().describe('已完成'),
+    }).optional().describe('前辈活动状态'),
 }).describe('活动状态');
 
 export const StatusSchema = z.object({
@@ -375,6 +383,15 @@ const MiscConfigSchema = z.object({
     }).optional().describe('灵宠对决配置'),
 }).describe('日常配置');
 
+const EventConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用自动活动'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('运行时刻'),
+}).describe('活动配置');
+
 export const ConfigSchema = z.object({
     metadata: MetadataConfigSchema.optional(),
     meditation: MeditationConfigSchema.optional(),
@@ -388,6 +405,7 @@ export const ConfigSchema = z.object({
     fortune: FortuneConfigSchema.optional(),
     bag: BagConfigSchema.optional(),
     misc: MiscConfigSchema.optional(),
+    event: EventConfigSchema.optional(),
 }).describe('自动化配置');
 
 export type Config = z.infer<typeof ConfigSchema>;
