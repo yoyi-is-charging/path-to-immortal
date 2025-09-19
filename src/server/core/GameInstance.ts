@@ -420,7 +420,8 @@ export class GameInstance {
             },
             event: {
                 capsule: { inProgress: false, isFinished: false },
-                trial: { count: 0 }
+                trial: { count: 0 },
+                senior: { currentPosition: undefined, monsterDefeated: false, isFinished: false },
             }
         })
     }
