@@ -10,7 +10,10 @@ export default class EventHandler implements CommandHandler {
         ['接受考验', 'event_trial'],
         ['领辟雷幡', 'event_seniorInit'],
         ['进入血魔谷', 'event_seniorEnter'],
-        ['行进方向', 'event_seniorMove']
+        ['行进方向', 'event_seniorMove'],
+        ['领传送符', 'event_travelInit'],
+        ['传送', 'event_travel'],
+        ['炼化明信片', 'event_travelFinish'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['event_capsule', /扭蛋成功|扭蛋体力用完/],
@@ -18,6 +21,9 @@ export default class EventHandler implements CommandHandler {
         ['event_seniorInit', /可以进入血魔谷/],
         ['event_seniorEnter', /顺利进入血魔谷/],
         ['event_seniorMove', /走了一段距离/],
+        ['event_travelInit', /传送符\+20/],
+        ['event_travel', /传送成功/],
+        ['event_travelFinish', /炼化完成/],
     ]);
 
     readonly CAPSULE_FINISHED_PATTERN = /扭蛋体力用完/;
@@ -26,6 +32,7 @@ export default class EventHandler implements CommandHandler {
     readonly SENIOR_MONSTER_POSITION_PATTERN = /魔物所在位置\((?<x>\d+),(?<y>\d+)\)/;
     readonly SENIOR_MONSTER_DEFEATED_PATTERN = /遇到强大魔物/;
     readonly SENIOR_FINISHED_PATTERN = /拿到灵芝回来/;
+    readonly TRAVEL_FINISHED_PATTERN = /今日传送符已耗尽/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance): Promise<void> {
         instance.account.status.event = instance.account.status.event || {};
@@ -78,6 +85,23 @@ export default class EventHandler implements CommandHandler {
                     nextMove = this.nextMove(currentPosition, { x: 0, y: 0 }, monsterPosition)
                 instance.scheduleCommand({ type: 'event_seniorMove', body: `行进方向 ${nextMove}` }, 1000);
                 break;
+            case 'event_travelInit':
+                instance.account.status.event.travel = instance.account.status.event.travel || {};
+                instance.updateStatus({ event: { travel: { inProgress: true, isFinished: false } } });
+                instance.scheduleCommand({ type: 'event_travel', body: '传送' }, 1000);
+                break;
+            case 'event_travel':
+                const travelFinished = this.TRAVEL_FINISHED_PATTERN.test(response);
+                instance.updateStatus({ event: { travel: { isFinished: travelFinished } } });
+                if (!travelFinished)
+                    instance.scheduleCommand({ type: 'event_travel', body: '传送' }, 1000);
+                else
+                    instance.scheduleCommand({ type: 'event_travelFinish', body: '炼化明信片' }, 1000);
+                break;
+            case 'event_travelFinish':
+                instance.updateStatus({ event: { travel: { inProgress: false } } });
+                this.registerTypeScheduler(instance, 'event_travelInit');
+                break;
         }
 
     }
@@ -110,7 +134,7 @@ export default class EventHandler implements CommandHandler {
     }
 
     registerScheduler(instance: GameInstance): void {
-        ['event_seniorInit'].forEach(type =>
+        ['event_seniorInit', 'event_travelInit'].forEach(type =>
             this.registerTypeScheduler(instance, type));
     }
     public registerTypeScheduler(instance: GameInstance, type: string): void {
@@ -120,10 +144,16 @@ export default class EventHandler implements CommandHandler {
             return;
         switch (type) {
             case 'event_seniorInit':
-                const date = getDate({ ...config.time, dayOffset: status?.senior?.isFinished ? 1 : 0 });
-                if (date > new Date(2025, 8, 28, 23, 59, 59))
+                const seniorDate = getDate({ ...config.time, dayOffset: status?.senior?.isFinished ? 1 : 0 });
+                if (seniorDate > new Date(2025, 8, 28, 23, 59, 59))
                     return;
-                instance.scheduleCommand({ type: 'event_seniorInit', body: '领辟雷幡', date });
+                instance.scheduleCommand({ type: 'event_seniorInit', body: '领辟雷幡', date: seniorDate });
+                break;
+            case 'event_travelInit':
+                const travelDate = getDate({ ...config.time, dayOffset: status?.travel?.isFinished ? 1 : 0 });
+                if (travelDate > new Date(2025, 9, 8, 23, 59, 59))
+                    return;
+                instance.scheduleCommand({ type: 'event_travelInit', body: '领传送符', date: travelDate });
                 break;
         }
     }

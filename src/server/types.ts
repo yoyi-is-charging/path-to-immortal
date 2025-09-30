@@ -209,6 +209,10 @@ const EventStatusSchema = z.object({
         monsterDefeated: z.boolean().optional().describe('是否已击败魔物'),
         isFinished: z.boolean().optional().describe('已完成'),
     }).optional().describe('前辈活动状态'),
+    travel: z.object({
+        inProgress: z.boolean().optional().describe('进行中'),
+        isFinished: z.boolean().optional().describe('已完成'),
+    }).optional().describe('国庆活动状态'),
 }).describe('活动状态');
 
 export const StatusSchema = z.object({

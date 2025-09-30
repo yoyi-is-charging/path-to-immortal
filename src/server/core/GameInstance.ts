@@ -422,6 +422,7 @@ export class GameInstance {
                 capsule: { inProgress: false, isFinished: false },
                 trial: { count: 0 },
                 senior: { currentPosition: undefined, monsterDefeated: false, isFinished: false },
+                travel: { inProgress: false, isFinished: false },
             }
         })
     }
