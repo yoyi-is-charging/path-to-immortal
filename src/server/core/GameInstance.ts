@@ -413,10 +413,11 @@ export class GameInstance {
                 tower: { count: 0 },
                 worship: { count: 0 },
                 fight: { randomCount: 0, masterCount: 0, challengeSectCount: 0, sectCount: 0 },
-                sect: { signIn: false, task: { inProgress: false, isFinished: false } },
+                sect: { signIn: false, task: { inProgress: false, isFinished: false }, blessing: false },
                 battleSignUp: { inProgress: false, isFinished: false },
                 fightPet: { inProgress: false, isFinished: false, nextTime: undefined },
                 hell: { inProgress: false, isFinished: false },
+                gift: false,
             },
             event: {
                 capsule: { inProgress: false, isFinished: false },
