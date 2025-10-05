@@ -35,6 +35,9 @@ export default class MiscHandler implements CommandHandler {
         ['大混战报名', 'misc_battleSignUp'],
         ['灵宠对决', 'misc_fightPet'],
         ['地狱寻宝', 'misc_hell'],
+        ['送礼物', 'misc_gift'],
+        ['确定送礼物', 'misc_giftConfirm'],
+        ['开启赐福', 'misc_sectBlessing'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['misc_signIn', /签到成功|今日已签到/],
@@ -60,6 +63,9 @@ export default class MiscHandler implements CommandHandler {
         ['misc_battleSignUp', /预计开打时间|当小时内已报名|当前小时的报名已截止|今日已经报名/],
         ['misc_fightPet', /对决开始|灵宠只能对决|每天最多对决/],
         ['misc_hell', /寻宝位置|已领过寻宝府石/],
+        ['misc_gift', /确定要送礼物吗/],
+        ['misc_giftConfirm', /送礼物成功/],
+        ['misc_sectBlessing', /赐福后宗门弟子|每人每日赐福次数/]
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
     readonly KILL_PATTERN = /挑战一刀斩/;
@@ -465,6 +471,17 @@ export default class MiscHandler implements CommandHandler {
                     instance.updateStatus({ misc: { hell: { inProgress: false, isFinished: true } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
+            case 'misc_gift':
+                instance.scheduleCommand({ type: 'misc_giftConfirm', body: '确定送礼物' }, 1000);
+                break;
+            case 'misc_giftConfirm':
+                instance.updateStatus({ misc: { gift: true } });
+                this.registerTypeScheduler(instance, 'misc_gift');
+                break;
+            case 'misc_sectBlessing':
+                instance.updateStatus({ misc: { sect: { blessing: true } } });
+                this.registerTypeScheduler(instance, command.type);
+                break;
         }
     }
 
@@ -474,7 +491,7 @@ export default class MiscHandler implements CommandHandler {
     }
 
     public registerScheduler(instance: GameInstance): void {
-        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_hell', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
+        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_hell', 'misc_gift', 'misc_sectBlessing', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
             this.registerTypeScheduler(instance, type));
     }
 
@@ -536,6 +553,14 @@ export default class MiscHandler implements CommandHandler {
                 break;
             case 'misc_hell':
                 instance.scheduleCommand({ type, body: '地狱寻宝 10', date: getDate({ ...config.time, dayOffset: status?.hell?.isFinished ? 1 : 0 }) });
+                break;
+            case 'misc_gift':
+                if (config.gift?.enabled)
+                    instance.scheduleCommand({ type, body: `送礼物 ${config.gift.type}`, date: getDate({ ...config.time, dayOffset: status?.gift ? 1 : 0 }) });
+                break;
+            case 'misc_sectBlessing':
+                if (config.sectBlessing)
+                    instance.scheduleCommand({ type, body: '开启赐福', date: getDate({ ...config.time, dayOffset: status?.sect?.blessing ? 1 : 0 }) });
                 break;
             case 'misc_receiveEnergy':
                 instance.scheduleCommand({ type, body: '领道友能量', date: getDate({ ...config.timePost, dayOffset: status?.receiveEnergy ? 1 : 0 }) });
