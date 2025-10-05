@@ -176,6 +176,7 @@ const MiscStatusSchema = z.object({
             inProgress: z.boolean().optional().describe('进行中'),
             isFinished: z.boolean().optional().describe('已完成'),
         }).optional().describe('宗门任务状态'),
+        blessing: z.boolean().optional().describe('宗门赐福状态'),
     }).optional().describe('宗门状态'),
     battleSignUp: z.object({
         inProgress: z.boolean().optional().describe('进行中'),
@@ -191,6 +192,7 @@ const MiscStatusSchema = z.object({
         inProgress: z.boolean().optional().describe('进行中'),
         isFinished: z.boolean().optional().describe('已完成'),
     }).optional().describe('地狱寻宝状态'),
+    gift: z.boolean().optional().describe('送礼物状态'),
 }).describe('日常状态');
 
 const EventStatusSchema = z.object({
@@ -385,6 +387,11 @@ const MiscConfigSchema = z.object({
             bytes_pb_reserve: z.string().optional().describe('灵宠对决目标引用'),
         }).optional().describe('灵宠对决目标'),
     }).optional().describe('灵宠对决配置'),
+    gift: z.object({
+        enabled: z.boolean().optional().describe('启用送礼物'),
+        type: z.string().optional().describe('礼物类型与数量'),
+    }).optional().describe('送礼物配置'),
+    sectBlessing: z.boolean().optional().describe('启用宗门赐福'),
 }).describe('日常配置');
 
 const EventConfigSchema = z.object({

@@ -20,7 +20,7 @@ export class AccountManager {
             wooding: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 }, levels: [5, 1], minPrice: 3995, friendPriceInquiryInterval: 15, energyReceiveTime: { hours: 23, minutes: 55, seconds: 0 } },
             fortune: { enabled: false, time: { hours: 18, minutes: 0, seconds: 0 }, occupation: 1, realmWar: '东1', levelWar: '上路 1', daoWar: 9 },
             bag: { enabled: false, reservedItems: ['十连'] },
-            misc: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, timePost: { hours: 21, minutes: 0, seconds: 0 }, forgeLimit: 50, forgeTypes: [1, 2, 3], fight: { enabled: false }, fightPet: { enabled: false } },
+            misc: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, timePost: { hours: 21, minutes: 0, seconds: 0 }, forgeLimit: 50, forgeTypes: [1, 2, 3], fight: { enabled: false }, fightPet: { enabled: false }, gift: { enabled: false, type: '1 1' }, sectBlessing: false },
             event: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 } },
         });
     }
