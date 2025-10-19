@@ -14,7 +14,7 @@ export default class FortuneHandler implements CommandHandler {
         ['加入战场', 'fortune_realmWar'],
         ['参加仙圣道战', 'fortune_levelWar'],
         ['参加宗门混战', 'fortune_sectWar'],
-        ['参加道道道战', 'fortune_daoWar'],
+        ['参加道法神战', 'fortune_daoWar'],
         ['参加区战力', 'fortune_serverWar']
     ])
 
@@ -25,7 +25,7 @@ export default class FortuneHandler implements CommandHandler {
         ['fortune_levelWar', /[上中下]路/],
         ['fortune_realmWar', /已加入战场/],
         ['fortune_sectWar', /宗门最多上阵|本周已经参加过/],
-        ['fortune_daoWar', /已加入道道道战|号战场/],
+        ['fortune_daoWar', /已加入道法神战|号战场/],
         ['fortune_serverWar', /已加入区战力/]
     ])
 
@@ -94,7 +94,7 @@ export default class FortuneHandler implements CommandHandler {
                 instance.scheduleCommand({ type, body: `参加宗门混战`, date: getDate({ ...config.time, dayOffset: status?.sectWar ? 1 : 0 }) });
                 break;
             case 'fortune_daoWar':
-                instance.scheduleCommand({ type, body: `参加道道道战 ${config.daoWar}`, date: getDate({ ...config.time, dayOffset: status?.daoWar ? 1 : 0 }) });
+                instance.scheduleCommand({ type, body: `参加道法神战 ${config.daoWar}`, date: getDate({ ...config.time, dayOffset: status?.daoWar ? 1 : 0 }) });
                 break;
             case 'fortune_serverWar':
                 instance.scheduleCommand({ type, body: `参加区战力`, date: getDate({ ...config.time, dayOffset: status?.serverWar ? 1 : 0 }) });

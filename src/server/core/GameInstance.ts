@@ -418,8 +418,10 @@ export class GameInstance {
                 fightPet: { inProgress: false, isFinished: false, nextTime: undefined },
                 hell: { inProgress: false, isFinished: false },
                 gift: false,
+                levelUp: { inProgress: false, isFinished: false },
             },
             event: {
+                package: { inProgress: false, isFinished: false },
                 capsule: { inProgress: false, isFinished: false },
                 trial: { count: 0 },
                 senior: { currentPosition: undefined, monsterDefeated: false, isFinished: false },

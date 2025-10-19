@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AccountManager } from './core/AccountManager';
 import { InstanceManager } from './core/InstanceManager';
 import { GameInstance } from './core/GameInstance';
+import { level } from 'winston';
 
 export interface RouterDependencies {
     accountManager: AccountManager;
@@ -54,6 +55,9 @@ const MeditationStatusSchema = z.object({
         str: z.string().optional().describe('双修目标ID'),
         bytes_pb_reserve: z.string().optional().describe('双修目标引用'),
     }).optional().describe('双修目标'),
+    partner: z.object({
+        retries: z.number().optional().describe('道侣双修重试次数'),
+    }).optional().describe('道侣双修状态'),
 }).describe('打坐状态');
 
 const GardenStatusSchema = z.object({
@@ -126,7 +130,7 @@ const FortuneStatusSchema = z.object({
     realmWar: z.boolean().optional().describe('三界战'),
     levelWar: z.boolean().optional().describe('仙圣道战'),
     sectWar: z.boolean().optional().describe('宗门混战'),
-    daoWar: z.boolean().optional().describe('道道道战'),
+    daoWar: z.boolean().optional().describe('道法神战'),
     serverWar: z.boolean().optional().describe('区战力'),
 }).describe('气运争夺战状态');
 
@@ -193,9 +197,17 @@ const MiscStatusSchema = z.object({
         isFinished: z.boolean().optional().describe('已完成'),
     }).optional().describe('地狱寻宝状态'),
     gift: z.boolean().optional().describe('送礼物状态'),
+    levelUp: z.object({
+        inProgress: z.boolean().optional().describe('进行中'),
+        isFinished: z.boolean().optional().describe('已完成'),
+    }).optional().describe('提升境界状态'),
 }).describe('日常状态');
 
 const EventStatusSchema = z.object({
+    package: z.object({
+        inProgress: z.boolean().optional().describe('进行中'),
+        isFinished: z.boolean().optional().describe('已完成'),
+    }).optional().describe('礼包状态'),
     capsule: z.object({
         inProgress: z.boolean().optional().describe('进行中'),
         isFinished: z.boolean().optional().describe('已完成'),
@@ -259,7 +271,10 @@ const MeditationConfigSchema = z.object({
         targets: z.array(z.string()).optional().describe('双修目标引用'),
         autoMeditation: z.boolean().optional().describe('所有目标没体力时自动打坐'),
     }).optional().describe('双修配置'),
-
+    partner: z.object({
+        enabled: z.boolean().optional().describe('启用道侣双修'),
+        isRequester: z.boolean().optional().describe('是否为发起者'),
+    }).optional().describe('道侣双修配置'),
 }).describe('打坐配置');
 
 const GardenConfigSchema = z.object({
@@ -347,7 +362,7 @@ const FortuneConfigSchema = z.object({
     occupation: z.number().optional().describe('矿山索引'),
     realmWar: z.string().optional().describe('三界战位置'),
     levelWar: z.string().optional().describe('仙圣道战位置'),
-    daoWar: z.number().optional().describe('道道道战位置'),
+    daoWar: z.number().optional().describe('道法神战位置'),
 }).describe('气运争夺战配置');
 
 const BagConfigSchema = z.object({
@@ -392,10 +407,15 @@ const MiscConfigSchema = z.object({
         type: z.string().optional().describe('礼物类型与数量'),
     }).optional().describe('送礼物配置'),
     sectBlessing: z.boolean().optional().describe('启用宗门赐福'),
+    levelUp: z.object({
+        enabled: z.boolean().optional().describe('启用提升境界'),
+        toMax: z.boolean().optional().describe('提升到最高境界'),
+    }).optional().describe('提升境界配置'),
 }).describe('日常配置');
 
 const EventConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动活动'),
+    package: z.boolean().optional().describe('启用自动领取礼包'),
     time: z.object({
         hours: z.number().min(0).max(23).optional(),
         minutes: z.number().min(0).max(59).optional(),
