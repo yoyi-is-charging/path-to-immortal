@@ -14,11 +14,15 @@ export default class MeditationHandler implements CommandHandler {
         ['吸收灵力', 'meditation'],
         ['双休', 'meditation_tantricRequest'],
         ['同意双休', 'meditation_tantricResponse'],
+        ['道侣双休', 'meditation_partnerRequest'],
+        ['同意道侣双休', 'meditation_partnerResponse'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['meditation', /请等待(打坐|双修|双休)完成|吸收灵力成功|你还没有打坐|需要消耗次数/],
         ['meditation_tantricRequest', /想和你一起双休|已经发起一个双休请求|请对方先吸收|需要消耗次数/],
         ['meditation_tantricResponse', /一起双休中|没找到你要同意的双休请求/],
+        ['meditation_partnerRequest', /想和你一起道侣双休|已经发起一个道侣双休请求|请对方先吸收|需要消耗次数/],
+        ['meditation_partnerResponse', /一起道侣双休中|没找到你要同意的道侣双休请求/],
     ]);
     readonly FINISH_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly REQUEST_ABSORB_PATTERN = /请对方先吸收/;
@@ -54,6 +58,28 @@ export default class MeditationHandler implements CommandHandler {
                 sourceInstance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
             }
         }
+        if (command.type === 'meditation_partnerRequest') {
+            const exhausted = this.EXHAUSTED_PATTERN.test(response);
+            instance.updateStatus({ meditation: { exhausted } });
+            if (!exhausted) {
+                let retries = instance.account.status.meditation.partner?.retries || 0;
+                const delay = Math.min(5000 * Math.pow(2, retries), 500000);
+                instance.scheduleCommand({ type: 'meditation', body: '吸收灵力' }, delay);
+            }
+            if (exhausted)
+                this.registerScheduler(instance);
+        }
+        if (command.type === 'meditation_partnerResponse') {
+            const finishTime = parseDate(response, this.FINISH_PATTERN);
+            if (finishTime) {
+                instance.updateStatus({ meditation: { inProgress: true, finishTime, exhausted: false, partner: { retries: 0 } } });
+                instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
+            } else {
+                let retries = instance.account.status.meditation.partner?.retries || 0;
+                instance.updateStatus({ meditation: { partner: { retries: retries + 1 } } });
+                instance.scheduleCommand({ type: 'meditation_partnerResponse', body: '同意道侣双休' }, Math.min(5000 * Math.pow(2, retries), 500000));
+            }
+        }
         if (command.type === 'meditation') {
             const finishTime = parseDate(response, this.FINISH_PATTERN);
             const inProgress = finishTime ? true : false;
@@ -75,10 +101,19 @@ export default class MeditationHandler implements CommandHandler {
                         instance.scheduleCommand({ type: 'meditation_tantricRequest', body: [{ str: '双休', bytes_pb_reserve: null }, target, { str: `${config.count}`, bytes_pb_reserve: null }] });
                     } else if (config.tantric.autoMeditation)
                         instance.scheduleCommand({ type: 'meditation', body: `打坐 ${config.count}` });
+                } else if (config.partner?.enabled) {
+                    const isRequester = config.partner.isRequester!;
+                    let retries = instance.account.status.meditation.partner?.retries || 0;
+                    if (isRequester) {
+                        instance.scheduleCommand({ type: 'meditation_partnerRequest', body: `道侣双休 ${config.count}` }, Math.min(5000 * (Math.pow(2, retries) - 1), 500000));
+                        instance.updateStatus({ meditation: { partner: { retries: retries + 1 } } });
+                    } else
+                        instance.scheduleCommand({ type: 'meditation_partnerResponse', body: '同意道侣双休' }, Math.min(5000 * Math.pow(2, retries), 500000));
                 } else
                     instance.scheduleCommand({ type: 'meditation', body: `打坐 ${config.count}` });
             }
             if (inProgress) {
+                instance.updateStatus({ meditation: { partner: { retries: 0 } } });
                 instance.scheduleCommand({ type: 'meditation', body: '吸收灵力', date: finishTime });
                 const sourceInstance = InstanceManager.findInstance(instance.account.status.meditation.target?.bytes_pb_reserve!);
                 if (sourceInstance) {

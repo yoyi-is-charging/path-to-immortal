@@ -1,6 +1,6 @@
 import { GameInstance } from "../../server/core/GameInstance";
 import { Command } from "../../server/types";
-import { getDate } from "../../utils/TimeUtils";
+import { getDate, parseFullDate } from "../../utils/TimeUtils";
 import { CommandHandler } from "../CommandHandler";
 
 export default class EventHandler implements CommandHandler {
@@ -14,6 +14,7 @@ export default class EventHandler implements CommandHandler {
         ['领传送符', 'event_travelInit'],
         ['传送', 'event_travel'],
         ['炼化明信片', 'event_travelFinish'],
+        ['领取礼包', 'event_package'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['event_capsule', /扭蛋成功|扭蛋体力用完/],
@@ -24,6 +25,7 @@ export default class EventHandler implements CommandHandler {
         ['event_travelInit', /传送符\+20/],
         ['event_travel', /传送成功/],
         ['event_travelFinish', /炼化完成/],
+        ['event_package', /领取礼包/],
     ]);
 
     readonly CAPSULE_FINISHED_PATTERN = /扭蛋体力用完/;
@@ -33,10 +35,29 @@ export default class EventHandler implements CommandHandler {
     readonly SENIOR_MONSTER_DEFEATED_PATTERN = /遇到强大魔物/;
     readonly SENIOR_FINISHED_PATTERN = /拿到灵芝回来/;
     readonly TRAVEL_FINISHED_PATTERN = /今日传送符已耗尽/;
+    readonly PACKAGE_LIST_PATTERN = /礼包如下/;
+    readonly PACKAGE_CODE_PATTERN = /礼包码:(?<code>\S+)\n\n.*✅.*活动时间:(?<start>\d+-\d+-\d+\s\d+:\d+:\d+)/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance): Promise<void> {
         instance.account.status.event = instance.account.status.event || {};
         switch (command.type) {
+            case 'event_package':
+                if (this.PACKAGE_LIST_PATTERN.test(response)) {
+                    const match = response.match(this.PACKAGE_CODE_PATTERN);
+                    if (match) {
+                        const code = match.groups!.code;
+                        const startDate = parseFullDate(match.groups!.start);
+                        if (startDate && startDate <= new Date()) {
+                            instance.updateStatus({ event: { package: { inProgress: true, isFinished: false } } });
+                            instance.scheduleCommand({ type: 'event_package', body: `领取礼包 ${code}` }, 1000);
+                            return;
+                        }
+                    }
+                    instance.updateStatus({ event: { package: { inProgress: false, isFinished: true } } });
+                } else
+                    instance.updateStatus({ event: { package: { inProgress: true, isFinished: false } } });
+                this.registerTypeScheduler(instance, 'event_package');
+                break;
             case 'event_capsule':
                 instance.account.status.event.capsule = instance.account.status.event.capsule || {};
                 const inProgress = !this.CAPSULE_FINISHED_PATTERN.test(response);
@@ -134,7 +155,7 @@ export default class EventHandler implements CommandHandler {
     }
 
     registerScheduler(instance: GameInstance): void {
-        ['event_seniorInit', 'event_travelInit'].forEach(type =>
+        ['event_package', 'event_seniorInit', 'event_travelInit'].forEach(type =>
             this.registerTypeScheduler(instance, type));
     }
     public registerTypeScheduler(instance: GameInstance, type: string): void {
@@ -143,6 +164,10 @@ export default class EventHandler implements CommandHandler {
         if (!config.enabled)
             return;
         switch (type) {
+            case 'event_package':
+                const packageDate = getDate({ ...config.time, dayOffset: status?.package?.isFinished ? 1 : 0 });
+                instance.scheduleCommand({ type: 'event_package', body: '领取礼包', date: packageDate });
+                break;
             case 'event_seniorInit':
                 const seniorDate = getDate({ ...config.time, dayOffset: status?.senior?.isFinished ? 1 : 0 });
                 if (seniorDate > new Date(2025, 8, 28, 23, 59, 59))
