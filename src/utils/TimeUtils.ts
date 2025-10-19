@@ -21,3 +21,11 @@ export function getDate({ hours = 0, minutes = 0, seconds = 0, ms = 999, dayOffs
         date.setDate(date.getDate() + 1);
     return date;
 }
+// parse YYYY-MM-DD HH:mm:ss
+export function parseFullDate(input: string): Date | undefined {
+    const pattern = /(?<year>\d{4})-(?<month>\d{1,2})-(?<day>\d{1,2})\s(?<hours>\d{1,2}):(?<minutes>\d{1,2}):(?<seconds>\d{1,2})/;
+    const match = input.match(pattern);
+    if (!match) return undefined;
+    const { year, month, day, hours, minutes, seconds } = match.groups || {};
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes), parseInt(seconds));
+}
