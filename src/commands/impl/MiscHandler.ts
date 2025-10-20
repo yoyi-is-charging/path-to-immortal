@@ -450,9 +450,9 @@ export default class MiscHandler implements CommandHandler {
             case 'misc_battleSignUp':
                 instance.account.status.misc.battleSignUp = instance.account.status.misc.battleSignUp || {};
                 if (!this.SIGNUP_FINISHED_PATTERN.test(response))
-                    instance.updateStatus({ misc: { battleSignUp: { inProgress: true, isFinished: false, nextTime: getDate({ hours: new Date().getHours() + 1 }) } } });
+                    instance.updateStatus({ misc: { battleSignUp: { inProgress: true, isFinished: false, nextTime: getDate({ hours: new Date().getHours() + 1, seconds: 5 }) } } });
                 else
-                    instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
+                    instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({ seconds: 5, dayOffset: 1 }) } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
             case 'misc_fightPet':
