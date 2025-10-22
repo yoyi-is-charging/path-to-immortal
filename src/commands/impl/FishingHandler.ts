@@ -17,6 +17,8 @@ export default class Fishing implements CommandHandler {
     ]);
     readonly RESPONSE_PATTERN = /无法进入鱼塘|预计[上咬]钩时间|鱼情好|离开鱼塘/;
     readonly POSITION_PATTERN = /位置(?<position>\d+):鱼情好/;
+    readonly SPECIAL_POSITION_PATTERN_1 = /位置(?<position>\d+):一网打尽/;
+    readonly SPECIAL_POSITION_PATTERN_2 = /位置(?<position>\d+):双钩/;
     readonly PULL_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly LEAVE_PATTERN = /发送指令:离开鱼塘/;
     readonly FINISHED_PATTERN = /已离开鱼塘/;
@@ -25,7 +27,13 @@ export default class Fishing implements CommandHandler {
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.fishing = instance.account.status.fishing || {};
         if (this.POSITION_PATTERN.test(response)) {
-            const position = parseInt(response.match(this.POSITION_PATTERN)!.groups!.position);
+            let position: number;
+            if (this.SPECIAL_POSITION_PATTERN_1.test(response))
+                position = parseInt(response.match(this.SPECIAL_POSITION_PATTERN_1)!.groups!.position);
+            else if (this.SPECIAL_POSITION_PATTERN_2.test(response))
+                position = parseInt(response.match(this.SPECIAL_POSITION_PATTERN_2)!.groups!.position);
+            else
+                position = parseInt(response.match(this.POSITION_PATTERN)!.groups!.position);
             instance.updateStatus({ fishing: { inProgress: true, position, pullTime: undefined } });
             instance.scheduleCommand({ type: 'fishing', body: `甩杆 ${position}` });
         } else if (this.PULL_TIME_PATTERN.test(response)) {
