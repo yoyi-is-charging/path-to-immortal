@@ -34,7 +34,7 @@ export default class BountyHandler implements CommandHandler {
             response.match(this.CLAIM_PATTERN_GLOBAL)?.forEach((match) => claimTimes.push(new Date()));
             response.match(this.TIME_LEFT_PATTERN_GLOBAL)?.forEach((match) => claimTimes.push(parseDate(match, this.TIME_LEFT_PATTERN)!));
             const claimTime = claimTimes.length > 0 ? Math.min(...claimTimes.map(date => date.getTime())) : undefined;
-            const ACCEPT_PATTERN = new RegExp(`(?<next>\\d+):(${config.bountyTypes!.join('|')}).*\\n\\n.*需要时间`);
+            const ACCEPT_PATTERN = new RegExp(`(?<next>\\d+):(${config.bountyTypes!.join('|')}).*\\n+.*需要时间`);
             const next = response.match(ACCEPT_PATTERN)?.groups?.next;
             instance.updateStatus({ bounty: { accepted: parseInt(accepted), limit: parseInt(limit), updateTime, claimTimes } });
             if (next && !finished && claimTimes.length < 3)
