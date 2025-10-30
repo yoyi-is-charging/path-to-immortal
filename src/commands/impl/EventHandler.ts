@@ -36,7 +36,7 @@ export default class EventHandler implements CommandHandler {
     readonly SENIOR_FINISHED_PATTERN = /拿到灵芝回来/;
     readonly TRAVEL_FINISHED_PATTERN = /今日传送符已耗尽/;
     readonly PACKAGE_LIST_PATTERN = /礼包如下/;
-    readonly PACKAGE_CODE_PATTERN = /礼包码:(?<code>\S+)\n\n.*✅.*活动时间:(?<start>\d+-\d+-\d+\s\d+:\d+:\d+)/;
+    readonly PACKAGE_CODE_PATTERN = /礼包码:(?<code>\S+)\n+.*✅.*活动时间:(?<start>\d+-\d+-\d+\s\d+:\d+:\d+)/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance): Promise<void> {
         instance.account.status.event = instance.account.status.event || {};
