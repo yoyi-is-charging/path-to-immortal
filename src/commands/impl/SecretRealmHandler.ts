@@ -9,8 +9,8 @@ import { getDate } from '../../utils/TimeUtils';
 export default class SecretRealmHandler implements CommandHandler {
     readonly category = 'secretRealm';
     readonly COMMAND_TYPE = new Map([
-        ['进入秘境', 'secretRealm'],
-        ['秘境选择', 'secretRealm'],
+        ['进入秘境', 'secretRealm_enter'],
+        ['秘境选择', 'secretRealm_select'],
     ]);
     readonly RESPONSE_PATTERN = /注意选择合适的技能|仅可进入秘境1次|可以选择以下技能|今日本层秘境魔物已全部清除|秘境选择已过期|已进入秘境/;
     readonly MONSTER_PATTERN = /魔物境界:(?<monsterLevel>.*)/;
@@ -32,10 +32,10 @@ export default class SecretRealmHandler implements CommandHandler {
             }));
             const selectedSkill = config.skillTypePriority!.map(type => skills.find(skill => skill.type === type)).filter(skill => skill !== undefined)[0];
             instance.updateStatus({ secretRealm: { inProgress: true, isFinished: false, monsterLevel, skill: selectedSkill } });
-            instance.scheduleCommand({ type: 'secretRealm', body: `秘境选择 ${selectedSkill.index}` }, 1000);
+            instance.scheduleCommand({ type: 'secretRealm_select', body: `秘境选择 ${selectedSkill.index}` }, 1000);
         } else if (this.ENTERED_PATTERN.test(response)) {
             instance.updateStatus({ secretRealm: { inProgress: true, isFinished: false, monsterLevel: undefined, skill: undefined } });
-            instance.scheduleCommand({ type: 'secretRealm', body: `秘境选择 1` }, 1000);
+            instance.scheduleCommand({ type: 'secretRealm_select', body: `秘境选择 1` }, 1000);
         } else {
             instance.updateStatus({ secretRealm: { inProgress: false, isFinished: true, monsterLevel: undefined, skill: undefined } });
             this.registerScheduler(instance);
@@ -44,7 +44,8 @@ export default class SecretRealmHandler implements CommandHandler {
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
         command.retries = (command.retries || 0) + 1;
-        return command.retries! < 3 ? command : undefined;
+        const maxRetries = command.type === 'secretRealm_select' ? 20 : 3;
+        return command.retries! < maxRetries ? command : undefined;
     }
 
     registerScheduler(instance: GameInstance): void {
@@ -52,7 +53,7 @@ export default class SecretRealmHandler implements CommandHandler {
         if (!config.enabled)
             return;
         instance.scheduleCommand({
-            type: 'secretRealm', body: async (instance: GameInstance) => {
+            type: 'secretRealm_enter', body: async (instance: GameInstance) => {
                 await instance.waitForLevelUpdate();
                 const level = instance.account.status.personalInfo?.level!;
                 return `进入秘境 ${Math.floor((level - 28) / 18)}`;
