@@ -197,6 +197,8 @@ const MiscStatusSchema = z.object({
         isFinished: z.boolean().optional().describe('已完成'),
     }).optional().describe('地狱寻宝状态'),
     gift: z.boolean().optional().describe('送礼物状态'),
+    subscribe: z.boolean().optional().describe('灵石月卡状态'),
+    fortune: z.boolean().optional().describe('福泽状态'),
     levelUp: z.object({
         inProgress: z.boolean().optional().describe('进行中'),
         isFinished: z.boolean().optional().describe('已完成'),
@@ -318,6 +320,7 @@ const ZooConfigSchema = z.object({
 
 const DreamlandConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动幻境'),
+    type: z.number().optional().describe('幻境类型'),
     time: z.object({
         hours: z.number().min(0).max(23).optional(),
         minutes: z.number().min(0).max(59).optional(),
@@ -407,6 +410,10 @@ const MiscConfigSchema = z.object({
         type: z.string().optional().describe('礼物类型与数量'),
     }).optional().describe('送礼物配置'),
     sectBlessing: z.boolean().optional().describe('启用宗门赐福'),
+    subscribe: z.object({
+        enabled: z.boolean().optional().describe('启用领灵石月卡'),
+        type: z.number().optional().describe('领取类型'),
+    }).optional().describe('灵石月卡配置'),
     levelUp: z.object({
         enabled: z.boolean().optional().describe('启用提升境界'),
         toMax: z.boolean().optional().describe('提升到最高境界'),

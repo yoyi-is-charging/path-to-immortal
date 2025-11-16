@@ -51,6 +51,6 @@ export default class DreamlandHandler implements CommandHandler {
         const config = instance.account.config.dreamland!;
         if (!config.enabled)
             return;
-        instance.scheduleCommand({ type: 'dreamland', body: '进入幻境', date: getDate({ ...config.time, dayOffset: instance.account.status.dreamland?.isFinished ? 1 : 0 }) });
+        instance.scheduleCommand({ type: 'dreamland', body: `进入幻境 ${config.type}`, date: getDate({ ...config.time, dayOffset: instance.account.status.dreamland?.isFinished ? 1 : 0 }) });
     }
 }
