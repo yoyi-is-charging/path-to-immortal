@@ -418,6 +418,8 @@ export class GameInstance {
                 fightPet: { inProgress: false, isFinished: false, nextTime: undefined },
                 hell: { inProgress: false, isFinished: false },
                 gift: false,
+                subscribe: false,
+                fortune: false,
                 levelUp: { inProgress: false, isFinished: false },
             },
             event: {

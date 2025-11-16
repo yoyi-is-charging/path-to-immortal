@@ -15,12 +15,12 @@ export class AccountManager {
             bounty: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, bountyTypes: ['帮扶凡间疾苦', '保护我方大殿', '保护我方药园', '解救被困修士', '铲除山贼保护城镇', '度化恶灵', '铲除妖兽', '保护我方岩矿', '抵御外族入侵', '铲除邪修', '寻找空间节点', '游历古战场', '游历仙灵谷', '游历五龙池'] },
             secretRealm: { enabled: false, time: { hours: 20, minutes: 0, seconds: 0 }, skillTypePriority: ['防御', '血量', '攻击', '免伤'] },
             zoo: { enabled: false, time: { hours: 20, minutes: 0, seconds: 0 }, autoEscape: true },
-            dreamland: { enabled: false, time: { hours: 20, minutes: 0, seconds: 0 } },
+            dreamland: { enabled: false, type: 1, time: { hours: 20, minutes: 0, seconds: 0 } },
             fishing: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 }, levels: [5, 1] },
             wooding: { enabled: false, time: { hours: 12, minutes: 0, seconds: 0 }, levels: [5, 1], minPrice: 3995, friendPriceInquiryInterval: 15, energyReceiveTime: { hours: 23, minutes: 55, seconds: 0 } },
             fortune: { enabled: false, time: { hours: 18, minutes: 0, seconds: 0 }, occupation: 1, realmWar: '东1', levelWar: '上路 1', daoWar: 9 },
             bag: { enabled: false, reservedItems: ['十连'] },
-            misc: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, timePost: { hours: 21, minutes: 0, seconds: 0 }, forgeLimit: 50, forgeTypes: [1, 2, 3], fight: { enabled: false }, fightPet: { enabled: false }, gift: { enabled: false, type: '1 1' }, sectBlessing: false, levelUp: { enabled: false, toMax: false } },
+            misc: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, timePost: { hours: 21, minutes: 0, seconds: 0 }, forgeLimit: 50, forgeTypes: [1, 2, 3], fight: { enabled: false }, fightPet: { enabled: false }, gift: { enabled: false, type: '1 1' }, sectBlessing: false, subscribe: { enabled: false, type: 1 }, levelUp: { enabled: false, toMax: false } },
             event: { enabled: false, package: false, time: { hours: 12, minutes: 0, seconds: 0 } },
         });
     }

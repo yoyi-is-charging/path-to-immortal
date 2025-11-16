@@ -38,6 +38,8 @@ export default class MiscHandler implements CommandHandler {
         ['送礼物', 'misc_gift'],
         ['确定送礼物', 'misc_giftConfirm'],
         ['开启赐福', 'misc_sectBlessing'],
+        ['领灵石月卡', 'misc_subscribe'],
+        ['一键领福泽', 'misc_fortune'],
         ['提升境界', 'misc_levelUp'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
@@ -67,6 +69,8 @@ export default class MiscHandler implements CommandHandler {
         ['misc_gift', /确定要送礼物吗/],
         ['misc_giftConfirm', /送礼物成功/],
         ['misc_sectBlessing', /赐福后宗门弟子|每人每日赐福次数/],
+        ['misc_subscribe', /月卡/],
+        ['misc_fortune', /你的福泽殿/],
         ['misc_levelUp', /无法提升|提升境界/],
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
@@ -485,6 +489,14 @@ export default class MiscHandler implements CommandHandler {
                 instance.updateStatus({ misc: { sect: { blessing: true } } });
                 this.registerTypeScheduler(instance, command.type);
                 break;
+            case 'misc_subscribe':
+                instance.updateStatus({ misc: { subscribe: true } });
+                this.registerTypeScheduler(instance, command.type);
+                break;
+            case 'misc_fortune':
+                instance.updateStatus({ misc: { fortune: true } });
+                this.registerTypeScheduler(instance, command.type);
+                break;
             case 'misc_levelUp':
                 if (this.LEVEL_UP_UNAVAILABLE_PATTERN.test(response) || !config.levelUp?.toMax)
                     instance.updateStatus({ misc: { levelUp: { inProgress: false, isFinished: true } } });
@@ -501,7 +513,7 @@ export default class MiscHandler implements CommandHandler {
     }
 
     public registerScheduler(instance: GameInstance): void {
-        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_hell', 'misc_gift', 'misc_sectBlessing', 'misc_levelUp', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
+        ['misc_signIn', 'misc_sendEnergy', 'misc_abode', 'misc_transmission', 'misc_kill', 'misc_challenge', 'misc_forge', 'misc_tower', 'misc_worship', 'misc_fightSect', 'misc_fight', 'misc_sectSignIn', 'misc_sectTask', 'misc_battleSignUp', 'misc_fightPet', 'misc_hell', 'misc_gift', 'misc_sectBlessing', 'misc_subscribe', 'misc_fortune', 'misc_levelUp', 'misc_receiveEnergy', 'misc_receiveTransmission', 'misc_receiveTaskReward', 'misc_receiveBlessing'].forEach(type =>
             this.registerTypeScheduler(instance, type));
     }
 
@@ -571,6 +583,13 @@ export default class MiscHandler implements CommandHandler {
             case 'misc_sectBlessing':
                 if (config.sectBlessing)
                     instance.scheduleCommand({ type, body: '开启赐福', date: getDate({ ...config.time, dayOffset: status?.sect?.blessing ? 1 : 0 }) });
+                break;
+            case 'misc_subscribe':
+                if (config.subscribe?.enabled)
+                    instance.scheduleCommand({ type, body: `领灵石月卡 ${config.subscribe.type}`, date: getDate({ ...config.time, dayOffset: status?.subscribe ? 1 : 0 }) });
+                break;
+            case 'misc_fortune':
+                instance.scheduleCommand({ type, body: '一键领福泽', date: getDate({ ...config.time, dayOffset: status?.fortune ? 1 : 0 }) });
                 break;
             case 'misc_levelUp':
                 if (config.levelUp?.enabled)
