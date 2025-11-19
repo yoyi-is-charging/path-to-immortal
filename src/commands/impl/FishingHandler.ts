@@ -19,6 +19,7 @@ export default class Fishing implements CommandHandler {
     readonly POSITION_PATTERN = /位置(?<position>\d+):鱼情好/;
     readonly SPECIAL_POSITION_PATTERN_1 = /位置(?<position>\d+):一网打尽/;
     readonly SPECIAL_POSITION_PATTERN_2 = /位置(?<position>\d+):双钩/;
+    readonly SPECIAL_POSITION_PATTERN_3 = /位置(?<position>\d+):道具/;
     readonly PULL_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly LEAVE_PATTERN = /发送指令:离开鱼塘/;
     readonly FINISHED_PATTERN = /已离开鱼塘/;
@@ -32,6 +33,8 @@ export default class Fishing implements CommandHandler {
                 position = parseInt(response.match(this.SPECIAL_POSITION_PATTERN_1)!.groups!.position);
             else if (this.SPECIAL_POSITION_PATTERN_2.test(response))
                 position = parseInt(response.match(this.SPECIAL_POSITION_PATTERN_2)!.groups!.position);
+            else if (this.SPECIAL_POSITION_PATTERN_3.test(response))
+                position = parseInt(response.match(this.SPECIAL_POSITION_PATTERN_3)!.groups!.position);
             else
                 position = parseInt(response.match(this.POSITION_PATTERN)!.groups!.position);
             instance.updateStatus({ fishing: { inProgress: true, position, pullTime: undefined } });
