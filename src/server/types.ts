@@ -229,6 +229,18 @@ const EventStatusSchema = z.object({
         inProgress: z.boolean().optional().describe('进行中'),
         isFinished: z.boolean().optional().describe('已完成'),
     }).optional().describe('国庆活动状态'),
+    mining: z.object({
+        shovelLevel: z.number().optional().describe('挖矿铲子等级'),
+        bagLevel: z.number().optional().describe('挖矿背包等级'),
+        minedCount: z.number().optional().describe('已挖位置数'),
+        stamina: z.number().optional().describe('当前体力值'),
+        ticket: z.number().optional().describe('当前矿券数'),
+        output: z.number().optional().describe('单次挖矿产出'),
+        currentCapacity: z.number().optional().describe('挖矿背包当前容量'),
+        capacity: z.number().optional().describe('挖矿背包最大容量'),
+        shovelUpgradeCost: z.number().optional().describe('铲子升级费用'),
+        bagUpgradeCost: z.number().optional().describe('背包升级费用'),
+    }).optional().describe('挖矿状态'),
 }).describe('活动状态');
 
 export const StatusSchema = z.object({
@@ -428,6 +440,10 @@ const EventConfigSchema = z.object({
         minutes: z.number().min(0).max(59).optional(),
         seconds: z.number().min(0).max(59).optional(),
     }).optional().describe('运行时刻'),
+    mining: z.object({
+        maxShovelLevel: z.number().optional().describe('最大挖矿铲子等级'),
+        maxBagLevel: z.number().optional().describe('最大挖矿背包等级'),
+    }).optional().describe('挖矿配置'),
 }).describe('活动配置');
 
 export const ConfigSchema = z.object({
