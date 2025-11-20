@@ -33,7 +33,7 @@ export default class EventHandler implements CommandHandler {
         ['event_travelFinish', /炼化完成/],
         ['event_miningEvent', /挖矿说明/],
         ['event_mining', /已挖/],
-        ['event_miningSell', /出售成功/],
+        ['event_miningSell', /出售成功|无法出售/],
         ['event_miningShovelUpgrade', /升级成功/],
         ['event_miningBagUpgrade', /升级成功/],
         ['event_miningExchange', /兑换成功/],
