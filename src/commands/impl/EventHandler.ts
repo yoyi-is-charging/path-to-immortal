@@ -176,7 +176,7 @@ export default class EventHandler implements CommandHandler {
                     else
                         instance.scheduleCommand({ type: 'event_mining', body: `挖矿 ${minedCount + 1}` }, 1000);
                 }
-                else
+                else if (ticket >= 100)
                     instance.scheduleCommand({ type: 'event_miningExchange', body: `矿券兑矿石 ${ticket}` }, 1000);
                 break;
             case 'event_mining':
