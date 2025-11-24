@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { AccountManager } from './core/AccountManager';
 import { InstanceManager } from './core/InstanceManager';
 import { GameInstance } from './core/GameInstance';
-import { level } from 'winston';
 
 export interface RouterDependencies {
     accountManager: AccountManager;
@@ -26,6 +25,7 @@ export interface Account {
     }>;
     metadata: {
         lastUpdateTime?: number;
+        tinyid?: string;
     };
     config: Config;
 }
