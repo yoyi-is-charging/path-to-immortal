@@ -163,13 +163,16 @@ export class GameInstance {
             );
         }
 
+        if (this.account.metadata.tinyid)
+            this.tinyID = this.account.metadata.tinyid;
+
         const captureParamsHandler = async (request: Request) => {
             const url = request.url();
-            if (url.includes('HandleProcess1?tinyidList')) {
+            if (url.includes('FirstViewProcess') && this.tinyID === null) {
                 logger.info(`Capturing tinyID for accountId: ${this.account.id}`);
                 const body = JSON.parse(request.postData() || '{}');
                 logger.info(`Captured tinyID body: ${JSON.stringify(body)}`);
-                this.tinyID = body.tinyid_list?.[0] || null;
+                this.tinyID = body.online_report_req?.tinyd_id || null;
                 if (this.tinyID === null) {
                     logger.error(`Failed to capture tinyID for accountId: ${this.account.id}`);
                     await this.page!.reload({ waitUntil: 'domcontentloaded' });
@@ -216,6 +219,8 @@ export class GameInstance {
                 }
             }
             if (receiveParamsCaptured && this.tinyID != null) {
+                this.account.metadata.tinyid = this.tinyID;
+                await AccountManager.persist();
                 this.page!.off('request', captureParamsHandler);
                 let headers = this.sendParams.init.headers as Record<string, string>;
                 headers['x-oidb'] = "{\"uint32_service_type\":\"0\"}";
