@@ -22,6 +22,7 @@ export class AccountManager {
             bag: { enabled: false, reservedItems: ['十连'] },
             misc: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 }, timePost: { hours: 21, minutes: 0, seconds: 0 }, forgeLimit: 50, forgeTypes: [1, 2, 3], fight: { enabled: false }, fightPet: { enabled: false }, gift: { enabled: false, type: '1 1' }, sectBlessing: false, subscribe: { enabled: false, type: 1 }, levelUp: { enabled: false, toMax: false } },
             event: { enabled: false, package: false, time: { hours: 12, minutes: 0, seconds: 0 }, mining: { maxShovelLevel: 8, maxBagLevel: 6 } },
+            rescue: { enabled: false },
         });
     }
 
