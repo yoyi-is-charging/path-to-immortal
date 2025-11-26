@@ -243,6 +243,13 @@ const EventStatusSchema = z.object({
     }).optional().describe('挖矿状态'),
 }).describe('活动状态');
 
+const RescueStatusSchema = z.object({
+    rescueTaskId: z.number().optional().describe('救援任务ID'),
+    rescueTaskProgress: z.number().optional().describe('救援任务进度'),
+    rescueTaskLimit: z.number().optional().describe('救援任务上限'),
+    arrivalTime: z.coerce.date().optional().describe('飞行到达时间'),
+}).describe('救援状态');
+
 export const StatusSchema = z.object({
     personalInfo: PersonalInfoSchema.optional(),
     meditation: MeditationStatusSchema.optional(),
@@ -257,6 +264,7 @@ export const StatusSchema = z.object({
     bag: BagStatusSchema.optional(),
     misc: MiscStatusSchema.optional(),
     event: EventStatusSchema.optional(),
+    rescue: RescueStatusSchema.optional(),
 }).describe('账户状态');
 
 export type Status = z.infer<typeof StatusSchema>;
@@ -446,6 +454,10 @@ const EventConfigSchema = z.object({
     }).optional().describe('挖矿配置'),
 }).describe('活动配置');
 
+const RescueConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用自动救援'),
+}).describe('救援任务配置');
+
 export const ConfigSchema = z.object({
     metadata: MetadataConfigSchema.optional(),
     meditation: MeditationConfigSchema.optional(),
@@ -460,6 +472,7 @@ export const ConfigSchema = z.object({
     bag: BagConfigSchema.optional(),
     misc: MiscConfigSchema.optional(),
     event: EventConfigSchema.optional(),
+    rescue: RescueConfigSchema.optional(),
 }).describe('自动化配置');
 
 export type Config = z.infer<typeof ConfigSchema>;
