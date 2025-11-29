@@ -397,6 +397,7 @@ export class GameInstance {
         await this.updateStatus({
             meditation: { exhausted: false },
             garden: { ripen: { ripeCount: 30 } },
+            bounty: { accepted: 0, refreshCount: 0 },
             secretRealm: { inProgress: false, isFinished: false },
             zoo: { inProgress: false, isFinished: false },
             dreamland: { inProgress: false, isFinished: false },
