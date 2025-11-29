@@ -75,6 +75,7 @@ const BountyStatusSchema = z.object({
     limit: z.number().optional().describe('悬赏数量上限'),
     updateTime: z.coerce.date().optional().describe('悬赏更新时刻'),
     claimTimes: z.array(z.coerce.date()).optional().describe('悬赏领取时刻'),
+    refreshCount: z.number().optional().describe('刷新次数'),
 }).describe('悬赏状态');
 
 const SecretRealmStatusSchema = z.object({
@@ -316,6 +317,7 @@ const BountyConfigSchema = z.object({
         seconds: z.number().min(0).max(59).optional(),
     }).optional().describe('开始时刻'),
     bountyTypes: z.array(z.string()).optional().describe('悬赏类型'),
+    refreshLimit: z.number().optional().describe('每日刷新次数上限'),
 }).describe('悬赏配置');
 
 const SecretRealmConfigSchema = z.object({
