@@ -11,14 +11,17 @@ export default class RescueHandler implements CommandHandler {
         ['救援任务', 'rescue'],
         ['接救援任务', 'rescue_accept'],
         ['飞往', 'rescue_flyto'],
+        ['领救援任务奖励', 'rescue_claim'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['rescue', /救援任务如下/],
         ['rescue_accept', /已接救援任务/],
         ['rescue_flyto', /预计到达日期/],
+        ['rescue_claim', /领取成功/],
     ])
     readonly RESCUE_AVAILABLE_PATTERN = /任务序号:(?<rescueTaskId>\d+)\n任务名称:.*?\n任务状态:未接\(0\/(?<rescueTaskLimit>\d+)\)/;
     readonly RESCUE_CURRENT_PATTERN = /任务序号:(?<rescueTaskId>\d+)\n任务名称:.*?\n任务状态:进行中\((?<rescueTaskProgress>\d+)\/(?<rescueTaskLimit>\d+)\)/;
+    readonly RESCUE_FINISHED_PATTERN = /可领取奖励/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.rescue = instance.account.status.rescue || {};
@@ -36,11 +39,15 @@ export default class RescueHandler implements CommandHandler {
                 const arrivalTime = parseFullDate(response);
                 instance.updateStatus({ rescue: { rescueTaskId: parseInt(rescueTaskId), rescueTaskLimit: parseInt(rescueTaskLimit), rescueTaskProgress: parseInt(rescueTaskProgress), arrivalTime } });
                 instance.scheduleCommand({ type: 'rescue_flyto', body: `飞往 ${parseInt(rescueTaskProgress) + 1}`, date: arrivalTime });
+            } else if (response.match(this.RESCUE_FINISHED_PATTERN)) {
+                instance.scheduleCommand({ type: 'rescue_claim', body: '领救援任务奖励' });
             }
         }
         if (command.type === 'rescue_accept')
             instance.scheduleCommand({ type: 'rescue_flyto', body: `飞往 1` });
         if (command.type === 'rescue_flyto')
+            instance.scheduleCommand({ type: 'rescue', body: '救援任务' });
+        if (command.type === 'rescue_claim')
             instance.scheduleCommand({ type: 'rescue', body: '救援任务' });
     }
 
