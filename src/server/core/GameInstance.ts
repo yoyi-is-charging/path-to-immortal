@@ -435,7 +435,8 @@ export class GameInstance {
                 senior: { currentPosition: undefined, monsterDefeated: false, isFinished: false },
                 travel: { inProgress: false, isFinished: false },
                 mining: { stamina: 30 },
-            }
+            },
+            gather: { finished: false },
         })
     }
 }

@@ -251,6 +251,14 @@ const RescueStatusSchema = z.object({
     arrivalTime: z.coerce.date().optional().describe('飞行到达时间'),
 }).describe('救援状态');
 
+const GatherStatusSchema = z.object({
+    gatherTaskId: z.number().optional().describe('采集任务ID'),
+    gatherTaskProgress: z.number().optional().describe('采集任务进度'),
+    gatherTaskLimit: z.number().optional().describe('采集任务上限'),
+    finishTime: z.coerce.date().optional().describe('采集完成时间'),
+    finished: z.boolean().optional().describe('当日采集完成'),
+}).describe('采集状态');
+
 export const StatusSchema = z.object({
     personalInfo: PersonalInfoSchema.optional(),
     meditation: MeditationStatusSchema.optional(),
@@ -266,6 +274,7 @@ export const StatusSchema = z.object({
     misc: MiscStatusSchema.optional(),
     event: EventStatusSchema.optional(),
     rescue: RescueStatusSchema.optional(),
+    gather: GatherStatusSchema.optional(),
 }).describe('账户状态');
 
 export type Status = z.infer<typeof StatusSchema>;
@@ -460,6 +469,10 @@ const RescueConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动救援'),
 }).describe('救援任务配置');
 
+const GatherConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用自动采集'),
+}).describe('采集任务配置');
+
 export const ConfigSchema = z.object({
     metadata: MetadataConfigSchema.optional(),
     meditation: MeditationConfigSchema.optional(),
@@ -475,6 +488,7 @@ export const ConfigSchema = z.object({
     misc: MiscConfigSchema.optional(),
     event: EventConfigSchema.optional(),
     rescue: RescueConfigSchema.optional(),
+    gather: GatherConfigSchema.optional(),
 }).describe('自动化配置');
 
 export type Config = z.infer<typeof ConfigSchema>;
