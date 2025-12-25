@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AccountManager } from './core/AccountManager';
 import { InstanceManager } from './core/InstanceManager';
 import { GameInstance } from './core/GameInstance';
+import { time } from 'console';
 
 export interface RouterDependencies {
     accountManager: AccountManager;
@@ -249,6 +250,7 @@ const RescueStatusSchema = z.object({
     rescueTaskProgress: z.number().optional().describe('救援任务进度'),
     rescueTaskLimit: z.number().optional().describe('救援任务上限'),
     arrivalTime: z.coerce.date().optional().describe('飞行到达时间'),
+    finished: z.boolean().optional().describe('当日救援完成'),
 }).describe('救援状态');
 
 const GatherStatusSchema = z.object({
@@ -467,10 +469,20 @@ const EventConfigSchema = z.object({
 
 const RescueConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动救援'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('运行时刻'),
 }).describe('救援任务配置');
 
 const GatherConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动采集'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('运行时刻'),
 }).describe('采集任务配置');
 
 export const ConfigSchema = z.object({
