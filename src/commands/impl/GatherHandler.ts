@@ -70,6 +70,6 @@ export default class GatherHandler implements CommandHandler {
         const status = instance.account.status.gather;
         if (!config.enabled)
             return;
-        instance.scheduleCommand({ type: 'gather', body: '采集任务', date: getDate({ dayOffset: status?.finished ? 1 : 0 }) });
+        instance.scheduleCommand({ type: 'gather', body: '采集任务', date: getDate({ ...config.time, dayOffset: status?.finished ? 1 : 0 }) });
     }
 }

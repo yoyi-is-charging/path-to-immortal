@@ -3,7 +3,7 @@
 import { Command } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
-import { parseFullDate } from '../../utils/TimeUtils';
+import { getDate, parseFullDate } from '../../utils/TimeUtils';
 
 export default class RescueHandler implements CommandHandler {
     readonly category = 'rescue';
@@ -16,12 +16,13 @@ export default class RescueHandler implements CommandHandler {
     readonly RESPONSE_PATTERN = new Map([
         ['rescue', /救援任务如下/],
         ['rescue_accept', /已接救援任务/],
-        ['rescue_flyto', /预计到达日期/],
+        ['rescue_flyto', /预计到达日期|每天最多飞/],
         ['rescue_claim', /领取成功/],
     ])
     readonly RESCUE_AVAILABLE_PATTERN = /任务序号:(?<rescueTaskId>\d+)\n任务名称:.*?\n任务状态:未接\(0\/(?<rescueTaskLimit>\d+)\)/;
     readonly RESCUE_CURRENT_PATTERN = /任务序号:(?<rescueTaskId>\d+)\n任务名称:.*?\n任务状态:进行中\((?<rescueTaskProgress>\d+)\/(?<rescueTaskLimit>\d+)\)/;
     readonly RESCUE_FINISHED_PATTERN = /可领取奖励/;
+    readonly RESCUE_LIMIT_PATTERN = /每天最多飞/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.rescue = instance.account.status.rescue || {};
@@ -45,8 +46,10 @@ export default class RescueHandler implements CommandHandler {
         }
         if (command.type === 'rescue_accept')
             instance.scheduleCommand({ type: 'rescue_flyto', body: `飞往 1` });
-        if (command.type === 'rescue_flyto')
-            instance.scheduleCommand({ type: 'rescue', body: '救援任务' });
+        if (command.type === 'rescue_flyto') {
+            instance.updateStatus({ rescue: { finished: true } });
+            this.registerScheduler(instance);
+        }
         if (command.type === 'rescue_claim')
             instance.scheduleCommand({ type: 'rescue', body: '救援任务' });
     }
@@ -61,6 +64,6 @@ export default class RescueHandler implements CommandHandler {
         const status = instance.account.status.rescue;
         if (!config.enabled)
             return;
-        instance.scheduleCommand({ type: 'rescue', body: '救援任务', date: status?.arrivalTime });
+        instance.scheduleCommand({ type: 'rescue', body: '救援任务', date: status?.arrivalTime ?? getDate({ ...config.time, dayOffset: status?.finished ? 1 : 0 }) });
     }
 }

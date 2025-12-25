@@ -436,6 +436,7 @@ export class GameInstance {
                 travel: { inProgress: false, isFinished: false },
                 mining: { stamina: 30 },
             },
+            rescue: { finished: false },
             gather: { finished: false },
         })
     }
