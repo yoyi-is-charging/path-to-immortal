@@ -47,7 +47,8 @@ export default class RescueHandler implements CommandHandler {
         if (command.type === 'rescue_accept')
             instance.scheduleCommand({ type: 'rescue_flyto', body: `飞往 1` });
         if (command.type === 'rescue_flyto') {
-            instance.updateStatus({ rescue: { finished: true } });
+            if (response.match(this.RESCUE_LIMIT_PATTERN))
+                instance.updateStatus({ rescue: { finished: true } });
             this.registerScheduler(instance);
         }
         if (command.type === 'rescue_claim')
