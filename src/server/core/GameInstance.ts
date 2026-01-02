@@ -403,7 +403,7 @@ export class GameInstance {
             dreamland: { inProgress: false, isFinished: false },
             fishing: { inProgress: false, finishedCount: 0 },
             wooding: { inProgress: false, finishedCount: 0, energyReceived: false },
-            fortune: { occupation: false, realmDraw: false, levelDraw: false, realmWar: false, levelWar: false, sectWar: false, daoWar: false, serverWar: false },
+            fortune: { occupation: false, drawCount: 0, realmWar: false, levelWar: false, sectWar: false, daoWar: false, serverWar: false, stateWar: false },
             misc: {
                 signIn: false,
                 sendEnergy: false,

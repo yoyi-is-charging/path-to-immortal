@@ -9,24 +9,24 @@ export default class FortuneHandler implements CommandHandler {
     readonly category = 'fortune';
     readonly COMMAND_TYPE = new Map([
         ['进攻矿山', 'fortune_occupation'],
-        ['三界抽气运', 'fortune_realmDraw'],
-        ['境界抽气运', 'fortune_levelDraw'],
+        ['抽气运', 'fortune_draw'],
         ['加入战场', 'fortune_realmWar'],
         ['参加仙圣道战', 'fortune_levelWar'],
         ['参加宗门混战', 'fortune_sectWar'],
         ['参加道法神战', 'fortune_daoWar'],
-        ['参加区战力', 'fortune_serverWar']
+        ['参加区战力', 'fortune_serverWar'],
+        ['参加同境混战', 'fortune_stateWar'],
     ])
 
     readonly RESPONSE_PATTERN = new Map([
         ['fortune_occupation', /[仙妖魔]界矿山/],
-        ['fortune_realmDraw', /【[仙妖魔]界】/],
-        ['fortune_levelDraw', /【[仙圣道]境】/],
+        ['fortune_draw', /已参加.*抽气运/],
         ['fortune_levelWar', /[上中下]路/],
         ['fortune_realmWar', /已加入战场/],
         ['fortune_sectWar', /宗门最多上阵|本周已经参加过/],
         ['fortune_daoWar', /已加入道法神战|号战场/],
-        ['fortune_serverWar', /已加入区战力/]
+        ['fortune_serverWar', /已加入区战力/],
+        ['fortune_stateWar', /参加同境混战/],
     ])
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
@@ -35,11 +35,9 @@ export default class FortuneHandler implements CommandHandler {
             case 'fortune_occupation':
                 instance.updateStatus({ fortune: { occupation: true } });
                 break;
-            case 'fortune_realmDraw':
-                instance.updateStatus({ fortune: { realmDraw: true } });
-                break;
-            case 'fortune_levelDraw':
-                instance.updateStatus({ fortune: { levelDraw: true } });
+            case 'fortune_draw':
+                const drawCount = (instance.account.status.fortune.drawCount || 0) + 1;
+                instance.updateStatus({ fortune: { drawCount } });
                 break;
             case 'fortune_realmWar':
                 instance.updateStatus({ fortune: { realmWar: true } });
@@ -56,6 +54,9 @@ export default class FortuneHandler implements CommandHandler {
             case 'fortune_serverWar':
                 instance.updateStatus({ fortune: { serverWar: true } });
                 break;
+            case 'fortune_stateWar':
+                instance.updateStatus({ fortune: { stateWar: true } });
+                break;
         }
         this.registerTypeScheduler(instance, command.type);
     }
@@ -66,7 +67,7 @@ export default class FortuneHandler implements CommandHandler {
     }
 
     registerScheduler(instance: GameInstance): void {
-        ['fortune_occupation', 'fortune_realmDraw', 'fortune_levelDraw', 'fortune_realmWar', 'fortune_levelWar', 'fortune_sectWar', 'fortune_daoWar', 'fortune_serverWar'].forEach(type => this.registerTypeScheduler(instance, type));
+        ['fortune_occupation', 'fortune_draw', 'fortune_realmWar', 'fortune_levelWar', 'fortune_sectWar', 'fortune_daoWar', 'fortune_serverWar', 'fortune_stateWar'].forEach(type => this.registerTypeScheduler(instance, type));
     }
 
     registerTypeScheduler(instance: GameInstance, type: string): void {
@@ -78,11 +79,12 @@ export default class FortuneHandler implements CommandHandler {
             case 'fortune_occupation':
                 instance.scheduleCommand({ type, body: `进攻矿山 ${config.occupation}`, date: getDate({ ...config.time, dayOffset: status?.occupation ? 1 : 0 }) });
                 break;
-            case 'fortune_realmDraw':
-                instance.scheduleCommand({ type, body: `三界抽气运`, date: getDate({ ...config.time, dayOffset: status?.realmDraw ? 1 : 0 }) });
-                break;
-            case 'fortune_levelDraw':
-                instance.scheduleCommand({ type, body: `境界抽气运`, date: getDate({ ...config.time, dayOffset: status?.levelDraw ? 1 : 0 }) });
+            case 'fortune_draw':
+                const drawCount = status?.drawCount || 0;
+                if (drawCount < 3)
+                    instance.scheduleCommand({ type, body: `抽气运 ${drawCount + 1}`, date: getDate({ ...config.time, dayOffset: 0 }) }, 1000);
+                else
+                    instance.scheduleCommand({ type, body: `抽气运 1`, date: getDate({ ...config.time, dayOffset: 1 }) });
                 break;
             case 'fortune_realmWar':
                 instance.scheduleCommand({ type, body: `加入战场 ${config.realmWar}`, date: getDate({ ...config.time, dayOffset: status?.realmWar ? 1 : 0 }) });
@@ -98,6 +100,10 @@ export default class FortuneHandler implements CommandHandler {
                 break;
             case 'fortune_serverWar':
                 instance.scheduleCommand({ type, body: `参加区战力`, date: getDate({ ...config.time, dayOffset: status?.serverWar ? 1 : 0 }) });
+                break;
+            case 'fortune_stateWar':
+                instance.scheduleCommand({ type, body: `参加同境混战`, date: getDate({ ...config.time, dayOffset: status?.stateWar ? 1 : 0 }) });
+                break;
         }
     }
 }

@@ -127,13 +127,13 @@ const WoodingStatusSchema = z.object({
 
 const FortuneStatusSchema = z.object({
     occupation: z.boolean().optional().describe('占领矿山'),
-    realmDraw: z.boolean().optional().describe('三界抽气运'),
-    levelDraw: z.boolean().optional().describe('境界抽气运'),
+    drawCount: z.number().optional().describe('抽气运次数'),
     realmWar: z.boolean().optional().describe('三界战'),
     levelWar: z.boolean().optional().describe('仙圣道战'),
     sectWar: z.boolean().optional().describe('宗门混战'),
     daoWar: z.boolean().optional().describe('道法神战'),
     serverWar: z.boolean().optional().describe('区战力'),
+    stateWar: z.boolean().optional().describe('同境混战'),
 }).describe('气运争夺战状态');
 
 const BagStatusSchema = z.object({
