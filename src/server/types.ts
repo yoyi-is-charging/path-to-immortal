@@ -261,6 +261,15 @@ const GatherStatusSchema = z.object({
     finished: z.boolean().optional().describe('当日采集完成'),
 }).describe('采集状态');
 
+const runeStatusSchema = z.object({
+    runeTaskId: z.number().optional().describe('制符任务ID'),
+    runeTaskLimit: z.number().optional().describe('制符任务上限'),
+    runeGathered: z.number().optional().describe('已收集材料数'),
+    runeMaked: z.number().optional().describe('已制符数'),
+    finishTime: z.coerce.date().optional().describe('完成时间'),
+    finished: z.boolean().optional().describe('当日制符完成'),
+}).describe('制符状态');
+
 export const StatusSchema = z.object({
     personalInfo: PersonalInfoSchema.optional(),
     meditation: MeditationStatusSchema.optional(),
@@ -277,6 +286,7 @@ export const StatusSchema = z.object({
     event: EventStatusSchema.optional(),
     rescue: RescueStatusSchema.optional(),
     gather: GatherStatusSchema.optional(),
+    rune: runeStatusSchema.optional(),
 }).describe('账户状态');
 
 export type Status = z.infer<typeof StatusSchema>;
@@ -485,6 +495,15 @@ const GatherConfigSchema = z.object({
     }).optional().describe('运行时刻'),
 }).describe('采集任务配置');
 
+const RuneConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用自动制符'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('运行时刻'),
+}).describe('制符任务配置');
+
 export const ConfigSchema = z.object({
     metadata: MetadataConfigSchema.optional(),
     meditation: MeditationConfigSchema.optional(),
@@ -501,6 +520,7 @@ export const ConfigSchema = z.object({
     event: EventConfigSchema.optional(),
     rescue: RescueConfigSchema.optional(),
     gather: GatherConfigSchema.optional(),
+    rune: RuneConfigSchema.optional(),
 }).describe('自动化配置');
 
 export type Config = z.infer<typeof ConfigSchema>;

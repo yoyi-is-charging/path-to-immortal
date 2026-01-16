@@ -438,6 +438,7 @@ export class GameInstance {
             },
             rescue: { finished: false },
             gather: { finished: false },
+            rune: { finished: false },
         })
     }
 }

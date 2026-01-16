@@ -24,6 +24,7 @@ export class AccountManager {
             event: { enabled: false, package: false, time: { hours: 12, minutes: 0, seconds: 0 }, mining: { maxShovelLevel: 8, maxBagLevel: 6 } },
             rescue: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
             gather: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
+            rune: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
         });
     }
 
