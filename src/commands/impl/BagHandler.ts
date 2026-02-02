@@ -46,7 +46,7 @@ export default class BagHandler implements CommandHandler {
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        command = { ...command, type: 'bag_check' , body: '我的背包', retries: (command.retries || 0) + 1};
+        command = { ...command, type: 'bag_check', body: '我的背包', retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }
 

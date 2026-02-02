@@ -25,6 +25,8 @@ export class AccountManager {
             rescue: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
             gather: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
             rune: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
+            ritual: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
+            genocide: { enabled: false, time: { hours: 0, minutes: 0, seconds: 0 } },
         });
     }
 

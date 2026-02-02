@@ -261,7 +261,7 @@ const GatherStatusSchema = z.object({
     finished: z.boolean().optional().describe('当日采集完成'),
 }).describe('采集状态');
 
-const runeStatusSchema = z.object({
+const RuneStatusSchema = z.object({
     runeTaskId: z.number().optional().describe('制符任务ID'),
     runeTaskLimit: z.number().optional().describe('制符任务上限'),
     runeGathered: z.number().optional().describe('已收集材料数'),
@@ -269,6 +269,28 @@ const runeStatusSchema = z.object({
     finishTime: z.coerce.date().optional().describe('完成时间'),
     finished: z.boolean().optional().describe('当日制符完成'),
 }).describe('制符状态');
+
+const RitualStatusSchema = z.object({
+    ritualTaskId: z.number().optional().describe('法器任务ID'),
+    ritualEastCount: z.number().optional().describe('已逛东市次数'),
+    ritualEastLimit: z.number().optional().describe('逛东市上限'),
+    ritualWestCount: z.number().optional().describe('已逛西市次数'),
+    ritualWestLimit: z.number().optional().describe('逛西市上限'),
+    finishTime: z.coerce.date().optional().describe('完成时间'),
+    finished: z.boolean().optional().describe('当日法器完成'),
+}).describe('法器状态');
+
+const GenocideStatusSchema = z.object({
+    genocideTaskId: z.number().optional().describe('屠宗任务ID'),
+    elderCount: z.number().optional().describe('已伏击长老次数'),
+    elderLimit: z.number().optional().describe('伏击长老上限'),
+    kaidonCount: z.number().optional().describe('已伏击宗主次数'),
+    kaidonLimit: z.number().optional().describe('伏击宗主上限'),
+    monkCount: z.number().optional().describe('已伏击大修士次数'),
+    monkLimit: z.number().optional().describe('伏击大修士上限'),
+    finishTime: z.coerce.date().optional().describe('完成时间'),
+    finished: z.boolean().optional().describe('当日屠宗完成'),
+}).describe('屠宗状态');
 
 export const StatusSchema = z.object({
     personalInfo: PersonalInfoSchema.optional(),
@@ -286,7 +308,9 @@ export const StatusSchema = z.object({
     event: EventStatusSchema.optional(),
     rescue: RescueStatusSchema.optional(),
     gather: GatherStatusSchema.optional(),
-    rune: runeStatusSchema.optional(),
+    rune: RuneStatusSchema.optional(),
+    ritual: RitualStatusSchema.optional(),
+    genocide: GenocideStatusSchema.optional(),
 }).describe('账户状态');
 
 export type Status = z.infer<typeof StatusSchema>;
@@ -504,6 +528,24 @@ const RuneConfigSchema = z.object({
     }).optional().describe('运行时刻'),
 }).describe('制符任务配置');
 
+const RitualConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用自动法器'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('运行时刻'),
+}).describe('法器任务配置');
+
+const GenocideConfigSchema = z.object({
+    enabled: z.boolean().optional().describe('启用自动屠宗'),
+    time: z.object({
+        hours: z.number().min(0).max(23).optional(),
+        minutes: z.number().min(0).max(59).optional(),
+        seconds: z.number().min(0).max(59).optional(),
+    }).optional().describe('运行时刻'),
+}).describe('屠宗任务配置');
+
 export const ConfigSchema = z.object({
     metadata: MetadataConfigSchema.optional(),
     meditation: MeditationConfigSchema.optional(),
@@ -521,6 +563,8 @@ export const ConfigSchema = z.object({
     rescue: RescueConfigSchema.optional(),
     gather: GatherConfigSchema.optional(),
     rune: RuneConfigSchema.optional(),
+    ritual: RitualConfigSchema.optional(),
+    genocide: GenocideConfigSchema.optional(),
 }).describe('自动化配置');
 
 export type Config = z.infer<typeof ConfigSchema>;

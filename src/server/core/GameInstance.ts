@@ -439,6 +439,8 @@ export class GameInstance {
             rescue: { finished: false },
             gather: { finished: false },
             rune: { finished: false },
+            ritual: { finished: false },
+            genocide: { finished: false },
         })
     }
 }
