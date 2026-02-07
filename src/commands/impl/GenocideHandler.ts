@@ -60,7 +60,7 @@ export default class GenocideHandler implements CommandHandler {
                 else if (parseInt(monkCount) < parseInt(monkLimit))
                     instance.scheduleCommand({ type: 'genocide_ambush', body: `伏击宗门主力 3` });
             } else if (response.match(this.GENOCIDE_FINISHED_PATTERN)) {
-                instance.scheduleCommand({ type: 'genocide_claim', body: '领取屠宗任务奖励' });
+                instance.scheduleCommand({ type: 'genocide_claim', body: '领屠宗任务奖励' });
             }
         }
         if (command.type === 'genocide_accept')
