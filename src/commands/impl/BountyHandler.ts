@@ -15,7 +15,7 @@ export default class BountyHandler implements CommandHandler {
         ['加速完成宗门悬赏', 'bounty_accelerate'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
-        ['bounty', /已领任务/],
+        ['bounty', /已接任务/],
         ['bounty_claim', /领宗门悬赏成功/],
         ['bounty_accept', /接收悬赏成功/],
         ['bounty_refresh', /刷新成功/],
