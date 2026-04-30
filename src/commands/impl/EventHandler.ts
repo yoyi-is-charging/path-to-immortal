@@ -259,7 +259,7 @@ export default class EventHandler implements CommandHandler {
                 break;
             case 'event_miningEvent':
                 const miningDate = getDate({ ...config.time, dayOffset: status?.mining?.stamina === 0 ? 1 : 0 });
-                if (miningDate > new Date(2025, 10, 25, 23, 59, 59))
+                if (miningDate > new Date(2026, 4, 5, 23, 59, 59))
                     return;
                 instance.scheduleCommand({ type: 'event_miningEvent', body: '挖矿活动', date: miningDate });
                 break;
