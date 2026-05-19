@@ -54,7 +54,7 @@ export default class MiscHandler implements CommandHandler {
         ['misc_receiveBlessing', /领取赐福成功|没有可领取的赐福/],
         ['misc_kill', /挑战一刀斩|体力不足/],
         ['misc_challenge', /剩余挑战次数|每人每天挑战噬魂兽3次/],
-        ['misc_forge', /锻造成功|锻造失败|炼器上限/],
+        ['misc_forge', /本次锻造次数|炼器上限/],
         ['misc_tower', /挑战通天塔|每人每天最多50个体力/],
         ['misc_worship', /崇拜的目光|已膜拜|膜拜排位10次/],
         ['misc_fightRandom', /试剑(成功|失败|过了)|最多试剑25次|1小时内只能试剑1次/],

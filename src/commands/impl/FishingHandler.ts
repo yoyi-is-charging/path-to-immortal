@@ -17,7 +17,7 @@ export default class Fishing implements CommandHandler {
     ]);
     readonly RESPONSE_PATTERN = /无法进入鱼塘|预计[上咬]钩时间|鱼情好|离开鱼塘/;
     readonly POSITION_PATTERN = /位置(?<position>\d+):鱼情好/;
-    readonly ITEM_POSITION_PATTERN = /位置(?<position>\d+):道具/;
+    readonly ITEM_POSITION_PATTERN = /位置(?<position>\d+):(?!鱼)/; 
     readonly PULL_TIME_PATTERN = /(?<hours>\d+)时(?<minutes>\d+)分(?<seconds>\d+)秒/;
     readonly LEAVE_PATTERN = /发送指令:离开鱼塘/;
     readonly FINISHED_PATTERN = /已离开鱼塘/;
