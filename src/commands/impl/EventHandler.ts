@@ -1,7 +1,53 @@
 import { GameInstance } from "../../server/core/GameInstance";
-import { Command } from "../../server/types";
-import { getDate, parseFullDate } from "../../utils/TimeUtils";
+import { Command, Config, Status } from "../../server/types";
+import { getDate } from "../../utils/TimeUtils";
+import { readCoordinate, readMiningEventFields, readMiningFields, readStartedPackageCodes } from "../../utils/FieldExtractor";
 import { CommandHandler } from "../CommandHandler";
+
+type EventStatus = NonNullable<Status['event']>;
+type EventConfig = NonNullable<Config['event']>;
+type Position = { x: number; y: number };
+
+type EventResponse =
+    | { type: 'packageList'; validCodes: string[] }
+    | { type: 'packageClaimed' }
+    | { type: 'capsule'; finished: boolean }
+    | { type: 'trial' }
+    | { type: 'seniorInit' }
+    | { type: 'seniorPosition'; currentPosition: Position; gardenPosition: Position; monsterPosition: Position; monsterDefeated: boolean; isFinished: boolean }
+    | { type: 'travelInit' }
+    | { type: 'travel'; finished: boolean }
+    | { type: 'travelFinished' }
+    | { type: 'miningEvent'; shovelLevel: number; bagLevel: number; stamina: number; ticket: number; output: number; capacity: number; shovelUpgradeCost: number; bagUpgradeCost: number }
+    | { type: 'mining'; stamina: number; currentCapacity: number; capacity: number; depth: number }
+    | { type: 'miningSold' }
+    | { type: 'miningShovelUpgraded' }
+    | { type: 'miningBagUpgraded' }
+    | { type: 'miningExchange' }
+    | { type: 'unmatched' };
+
+type EventEffect =
+    | { type: 'patchStatus'; status: EventStatus }
+    | { type: 'scheduleCommand'; command: Command; delay?: number }
+    | { type: 'registerTypeScheduler'; commandType: string };
+
+const EVENT_COMMAND = {
+    capsule: '扭蛋',
+    trial: '接受考验',
+    seniorInit: '领辟雷幡',
+    seniorEnter: '进入血魔谷',
+    seniorMove: '行进方向',
+    travelInit: '领传送符',
+    travel: '传送',
+    travelFinish: '炼化明信片',
+    miningEvent: '挖矿活动',
+    mining: '挖矿',
+    miningSell: '挖矿出售',
+    miningShovelUpgrade: '挖矿铲子升级',
+    miningBagUpgrade: '挖矿背包升级',
+    miningExchange: '矿券兑矿石',
+    package: '领取礼包',
+} as const;
 
 export default class EventHandler implements CommandHandler {
     readonly category = 'event';
@@ -40,164 +86,242 @@ export default class EventHandler implements CommandHandler {
         ['event_package', /领取礼包/],
     ]);
 
-    readonly CAPSULE_FINISHED_PATTERN = /扭蛋体力用完/;
-    readonly SENIOR_CURRENT_POSITION_PATTERN = /你现在的位置是\((?<x>\d+),(?<y>\d+)\)/;
-    readonly SENIOR_GARDEN_POSITION_PATTERN = /药园所在位置\((?<x>\d+),(?<y>\d+)\)/;
-    readonly SENIOR_MONSTER_POSITION_PATTERN = /魔物所在位置\((?<x>\d+),(?<y>\d+)\)/;
-    readonly SENIOR_MONSTER_DEFEATED_PATTERN = /遇到强大魔物/;
-    readonly SENIOR_FINISHED_PATTERN = /拿到灵芝回来/;
-    readonly TRAVEL_FINISHED_PATTERN = /今日传送符已耗尽/;
-    readonly PACKAGE_LIST_PATTERN = /礼包如下/;
-    readonly PACKAGE_CODE_PATTERN_GLOBAL = /礼包码:(?<code>\S+)\n+.*✅.*活动时间:(?<start>\d+-\d+-\d+\s\d+:\d+:\d+)/g;
-    readonly MINING_EVENT_SHOVEL_LEVEL_PATTERN = /铲子LV(?<level>\d+)/;
-    readonly MINING_EVENT_BAG_LEVEL_PATTERN = /背包LV(?<level>\d+)/;
-    readonly MINING_EVENT_STAMINA_PATTERN = /体力(?<stamina>\d+)/;
-    readonly MINING_EVENT_OUTPUT_PATTERN = /每次挖(?<output>\d+)0cm/;
-    readonly MINING_EVENT_CAPACITY_PATTERN = /格子(?<capacity>\d+)/;
-    readonly MINING_EVENT_TICKET_PATTERN = /矿券(?<ticket>\d+)/;
-    readonly MINING_EVENT_SHOVEL_UPGRADE_COST_PATTERN = /铲子.*升级需(?<shovelUpgradeCost>\d+)/;
-    readonly MINING_EVENT_BAG_UPGRADE_COST_PATTERN = /背包.*升级需(?<bagUpgradeCost>\d+)/;
-    readonly MINING_STAMINA_PATTERN = /体力-1\/(?<stamina>\d+)/;
-    readonly MINING_CAPACITY_PATTERN = /背包:(?<currentCapacity>\d+)\/(?<capacity>\d+)/;
-    readonly MINING_DEPTH_PATTERN = /已挖深度:(?<depth>\d+)/;
-
     async handleResponse(command: Command, response: string, instance: GameInstance): Promise<void> {
         instance.account.status.event = instance.account.status.event || {};
+        const eventResponse = this.parseResponse(command, response, instance);
+        const effects = this.transition(eventResponse, instance);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
+    }
+
+    private parseResponse(command: Command, response: string, instance: GameInstance): EventResponse {
         switch (command.type) {
             case 'event_package':
-                if (this.PACKAGE_LIST_PATTERN.test(response)) {
-                    const codes = [...response.matchAll(this.PACKAGE_CODE_PATTERN_GLOBAL)].map(match => ({ code: match.groups!.code, startDate: parseFullDate(match.groups!.start) }));
-                    const validCodes = codes.filter(c => c.startDate && c.startDate <= new Date());
-                    if (validCodes.length > 0) {
-                        instance.updateStatus({ event: { package: { inProgress: true, isFinished: false } } });
-                        instance.scheduleCommand({ type: 'event_package', body: `领取礼包 ${validCodes[0].code}` }, 1000);
-                        return;
-                    }
-                    instance.updateStatus({ event: { package: { inProgress: false, isFinished: true } } });
-                } else
-                    instance.updateStatus({ event: { package: { inProgress: true, isFinished: false } } });
-                this.registerTypeScheduler(instance, 'event_package');
-                break;
+                return this.parsePackage(response);
             case 'event_capsule':
-                instance.account.status.event.capsule = instance.account.status.event.capsule || {};
-                const inProgress = !this.CAPSULE_FINISHED_PATTERN.test(response);
-                instance.updateStatus({ event: { capsule: { inProgress: inProgress, isFinished: !inProgress } } });
-                if (inProgress)
-                    instance.scheduleCommand({ type: 'event_capsule', body: '扭蛋' }, 1000);
-                break;
+                return { type: 'capsule', finished: response.includes('扭蛋体力用完') };
             case 'event_trial':
-                const count = (instance.account.status.event?.trial?.count || 0) + 1;
-                instance.updateStatus({ event: { trial: { count: count } } });
-                if (count < 8)
-                    instance.scheduleCommand({ type: 'event_trial', body: `接受考验 ${count + 1}` }, 1000);
-                break;
+                return { type: 'trial' };
             case 'event_seniorInit':
-                instance.account.status.event.senior = instance.account.status.event.senior || {};
-                instance.scheduleCommand({ type: 'event_seniorEnter', body: '进入血魔谷' }, 1000);
-                break;
+                return { type: 'seniorInit' };
             case 'event_seniorEnter':
             case 'event_seniorMove':
-                const currentPosition = {
-                    x: parseInt(response.match(this.SENIOR_CURRENT_POSITION_PATTERN)!.groups!.x),
-                    y: parseInt(response.match(this.SENIOR_CURRENT_POSITION_PATTERN)!.groups!.y),
-                }
-                const gardenPosition = {
-                    x: parseInt(response.match(this.SENIOR_GARDEN_POSITION_PATTERN)?.groups?.x || '-1'),
-                    y: parseInt(response.match(this.SENIOR_GARDEN_POSITION_PATTERN)?.groups?.y || '-1'),
-                }
-                const monsterPosition = {
-                    x: parseInt(response.match(this.SENIOR_MONSTER_POSITION_PATTERN)?.groups?.x || '-1'),
-                    y: parseInt(response.match(this.SENIOR_MONSTER_POSITION_PATTERN)?.groups?.y || '-1'),
-                }
-                const monsterDefeated = this.SENIOR_MONSTER_DEFEATED_PATTERN.test(response) || instance.account.status.event.senior?.monsterDefeated;
-                const isFinished = this.SENIOR_FINISHED_PATTERN.test(response);
-                instance.updateStatus({ event: { senior: { currentPosition, monsterDefeated, isFinished } } });
-                if (isFinished) {
-                    this.registerTypeScheduler(instance, 'event_seniorInit');
-                    break;
-                }
-                let nextMove: 1 | 2 | 3 | 4;
-                if (gardenPosition.x !== -1 && gardenPosition.y !== -1) {
-                    if (monsterDefeated)
-                        nextMove = this.nextMove(currentPosition, gardenPosition, monsterPosition)
-                    else
-                        nextMove = this.nextMove(currentPosition, monsterPosition, gardenPosition)
-                } else
-                    nextMove = this.nextMove(currentPosition, { x: 0, y: 0 }, monsterPosition)
-                instance.scheduleCommand({ type: 'event_seniorMove', body: `行进方向 ${nextMove}` }, 1000);
-                break;
+                return this.parseSeniorPosition(response, instance);
             case 'event_travelInit':
-                instance.account.status.event.travel = instance.account.status.event.travel || {};
-                instance.updateStatus({ event: { travel: { inProgress: true, isFinished: false } } });
-                instance.scheduleCommand({ type: 'event_travel', body: '传送' }, 1000);
-                break;
+                return { type: 'travelInit' };
             case 'event_travel':
-                const travelFinished = this.TRAVEL_FINISHED_PATTERN.test(response);
-                instance.updateStatus({ event: { travel: { isFinished: travelFinished } } });
-                if (!travelFinished)
-                    instance.scheduleCommand({ type: 'event_travel', body: '传送' }, 1000);
-                else
-                    instance.scheduleCommand({ type: 'event_travelFinish', body: '炼化明信片' }, 1000);
-                break;
+                return { type: 'travel', finished: response.includes('今日传送符已耗尽') };
             case 'event_travelFinish':
-                instance.updateStatus({ event: { travel: { inProgress: false } } });
-                this.registerTypeScheduler(instance, 'event_travelInit');
-                break;
+                return { type: 'travelFinished' };
             case 'event_miningEvent':
-                const shovelLevel = parseInt(response.match(this.MINING_EVENT_SHOVEL_LEVEL_PATTERN)!.groups!.level);
-                const bagLevel = parseInt(response.match(this.MINING_EVENT_BAG_LEVEL_PATTERN)!.groups!.level);
-                const stamina = parseInt(response.match(this.MINING_EVENT_STAMINA_PATTERN)!.groups!.stamina);
-                const ticket = parseInt(response.match(this.MINING_EVENT_TICKET_PATTERN)!.groups!.ticket);
-                const output = parseInt(response.match(this.MINING_EVENT_OUTPUT_PATTERN)!.groups!.output);
-                const capacity = parseInt(response.match(this.MINING_EVENT_CAPACITY_PATTERN)!.groups!.capacity);
-                const shovelUpgradeCost = parseInt(response.match(this.MINING_EVENT_SHOVEL_UPGRADE_COST_PATTERN)!.groups!.shovelUpgradeCost);
-                const bagUpgradeCost = parseInt(response.match(this.MINING_EVENT_BAG_UPGRADE_COST_PATTERN)!.groups!.bagUpgradeCost);
-                instance.updateStatus({ event: { mining: { shovelLevel, bagLevel, stamina, ticket, output, capacity, shovelUpgradeCost, bagUpgradeCost } } });
-                const currentCapacity = instance.account.status.event.mining?.currentCapacity || 0;
-                const minedCount = instance.account.status.event.mining?.minedCount || 0;
-                if (stamina === 0) {
-                    this.registerTypeScheduler(instance, 'event_miningEvent');
-                    break;
-                }
-                if (minedCount < 5) {
-                    if (shovelLevel < instance.account.config.event?.mining?.maxShovelLevel! && shovelUpgradeCost <= ticket) {
-                        instance.scheduleCommand({ type: 'event_miningShovelUpgrade', body: '挖矿铲子升级' }, 1000);
-                        break;
-                    }
-                    if (bagLevel < instance.account.config.event?.mining?.maxBagLevel! && bagUpgradeCost <= ticket) {
-                        instance.scheduleCommand({ type: 'event_miningBagUpgrade', body: '挖矿背包升级' }, 1000);
-                        break;
-                    }
-                    if (capacity - currentCapacity < output)
-                        instance.scheduleCommand({ type: 'event_miningSell', body: '挖矿出售' }, 1000);
-                    else
-                        instance.scheduleCommand({ type: 'event_mining', body: `挖矿 ${minedCount + 1}` }, 1000);
-                }
-                else if (ticket >= 100)
-                    instance.scheduleCommand({ type: 'event_miningExchange', body: `矿券兑矿石 ${ticket}` }, 1000);
-                break;
+                return this.parseMiningEvent(response);
             case 'event_mining':
-                const newStamina = parseInt(response.match(this.MINING_STAMINA_PATTERN)!.groups!.stamina);
-                const newCurrentCapacity = parseInt(response.match(this.MINING_CAPACITY_PATTERN)!.groups!.currentCapacity);
-                const newCapacity = parseInt(response.match(this.MINING_CAPACITY_PATTERN)!.groups!.capacity);
-                const depth = parseInt(response.match(this.MINING_DEPTH_PATTERN)!.groups!.depth);
-                const newMinedCount = depth === 510 ? (instance.account.status.event.mining?.minedCount || 0) + 1 : instance.account.status.event.mining?.minedCount || 0;
-                instance.updateStatus({ event: { mining: { stamina: newStamina, currentCapacity: newCurrentCapacity, capacity: newCapacity, minedCount: newMinedCount } } });
-                this.registerTypeScheduler(instance, 'event_miningEvent');
-                break;
+                return this.parseMining(response);
             case 'event_miningSell':
-                instance.updateStatus({ event: { mining: { currentCapacity: 0 } } });
-                this.registerTypeScheduler(instance, 'event_miningEvent');
-                break;
+                return { type: 'miningSold' };
             case 'event_miningShovelUpgrade':
-                instance.updateStatus({ event: { mining: { shovelLevel: (instance.account.status.event.mining?.shovelLevel || 0) + 1 } } });
-                this.registerTypeScheduler(instance, 'event_miningEvent');
-                break;
+                return { type: 'miningShovelUpgraded' };
             case 'event_miningBagUpgrade':
-                instance.updateStatus({ event: { mining: { bagLevel: (instance.account.status.event.mining?.bagLevel || 0) + 1 } } });
-                this.registerTypeScheduler(instance, 'event_miningEvent');
-                break;
+                return { type: 'miningBagUpgraded' };
             case 'event_miningExchange':
+                return { type: 'miningExchange' };
+            default:
+                return { type: 'unmatched' };
+        }
+    }
+
+    private parsePackage(response: string): EventResponse {
+        if (!response.includes('礼包如下'))
+            return { type: 'packageClaimed' };
+        return { type: 'packageList', validCodes: readStartedPackageCodes(response) };
+    }
+
+    private parseSeniorPosition(response: string, instance: GameInstance): EventResponse {
+        const current = readCoordinate(response, '你现在的位置是');
+        if (!current)
+            return { type: 'unmatched' };
+        return {
+            type: 'seniorPosition',
+            currentPosition: current,
+            gardenPosition: readCoordinate(response, '药园所在位置') ?? this.emptyPosition(),
+            monsterPosition: readCoordinate(response, '魔物所在位置') ?? this.emptyPosition(),
+            monsterDefeated: response.includes('遇到强大魔物') || Boolean(instance.account.status.event?.senior?.monsterDefeated),
+            isFinished: response.includes('拿到灵芝回来'),
+        };
+    }
+
+    private parseMiningEvent(response: string): EventResponse {
+        const fields = readMiningEventFields(response);
+        if (!fields)
+            return { type: 'unmatched' };
+        return { type: 'miningEvent', ...fields };
+    }
+
+    private parseMining(response: string): EventResponse {
+        const fields = readMiningFields(response);
+        if (!fields)
+            return { type: 'unmatched' };
+        return { type: 'mining', ...fields };
+    }
+
+    private transition(response: EventResponse, instance: GameInstance): EventEffect[] {
+        switch (response.type) {
+            case 'packageList':
+                return this.transitionPackageList(response);
+            case 'packageClaimed':
+                return [
+                    { type: 'patchStatus', status: { package: { inProgress: true, isFinished: false } } },
+                    { type: 'registerTypeScheduler', commandType: 'event_package' },
+                ];
+            case 'capsule':
+                return this.transitionCapsule(response);
+            case 'trial':
+                return this.transitionTrial(instance.account.status.event!);
+            case 'seniorInit':
+                return [{ type: 'scheduleCommand', command: { type: 'event_seniorEnter', body: EVENT_COMMAND.seniorEnter }, delay: 1000 }];
+            case 'seniorPosition':
+                return this.transitionSeniorPosition(response);
+            case 'travelInit':
+                return [
+                    { type: 'patchStatus', status: { travel: { inProgress: true, isFinished: false } } },
+                    { type: 'scheduleCommand', command: { type: 'event_travel', body: EVENT_COMMAND.travel }, delay: 1000 },
+                ];
+            case 'travel':
+                return [
+                    { type: 'patchStatus', status: { travel: { isFinished: response.finished } } },
+                    { type: 'scheduleCommand', command: { type: response.finished ? 'event_travelFinish' : 'event_travel', body: response.finished ? EVENT_COMMAND.travelFinish : EVENT_COMMAND.travel }, delay: 1000 },
+                ];
+            case 'travelFinished':
+                return [
+                    { type: 'patchStatus', status: { travel: { inProgress: false } } },
+                    { type: 'registerTypeScheduler', commandType: 'event_travelInit' },
+                ];
+            case 'miningEvent':
+                return this.transitionMiningEvent(response, instance.account.status.event!, instance.account.config.event!);
+            case 'mining':
+                return this.transitionMining(response, instance.account.status.event!);
+            case 'miningSold':
+                return [
+                    { type: 'patchStatus', status: { mining: { currentCapacity: 0 } } },
+                    { type: 'registerTypeScheduler', commandType: 'event_miningEvent' },
+                ];
+            case 'miningShovelUpgraded':
+                return [
+                    { type: 'patchStatus', status: { mining: { shovelLevel: (instance.account.status.event?.mining?.shovelLevel || 0) + 1 } } },
+                    { type: 'registerTypeScheduler', commandType: 'event_miningEvent' },
+                ];
+            case 'miningBagUpgraded':
+                return [
+                    { type: 'patchStatus', status: { mining: { bagLevel: (instance.account.status.event?.mining?.bagLevel || 0) + 1 } } },
+                    { type: 'registerTypeScheduler', commandType: 'event_miningEvent' },
+                ];
+            case 'miningExchange':
+            case 'unmatched':
+                return [];
+        }
+    }
+
+    private transitionPackageList(response: Extract<EventResponse, { type: 'packageList' }>): EventEffect[] {
+        if (response.validCodes.length > 0)
+            return [
+                { type: 'patchStatus', status: { package: { inProgress: true, isFinished: false } } },
+                { type: 'scheduleCommand', command: { type: 'event_package', body: `${EVENT_COMMAND.package} ${response.validCodes[0]}` }, delay: 1000 },
+            ];
+        return [
+            { type: 'patchStatus', status: { package: { inProgress: false, isFinished: true } } },
+            { type: 'registerTypeScheduler', commandType: 'event_package' },
+        ];
+    }
+
+    private transitionCapsule(response: Extract<EventResponse, { type: 'capsule' }>): EventEffect[] {
+        const inProgress = !response.finished;
+        const effects: EventEffect[] = [
+            { type: 'patchStatus', status: { capsule: { inProgress, isFinished: !inProgress } } },
+        ];
+        if (inProgress)
+            effects.push({ type: 'scheduleCommand', command: { type: 'event_capsule', body: EVENT_COMMAND.capsule }, delay: 1000 });
+        return effects;
+    }
+
+    private transitionTrial(status: EventStatus): EventEffect[] {
+        const count = (status.trial?.count || 0) + 1;
+        const effects: EventEffect[] = [
+            { type: 'patchStatus', status: { trial: { count } } },
+        ];
+        if (count < 8)
+            effects.push({ type: 'scheduleCommand', command: { type: 'event_trial', body: `${EVENT_COMMAND.trial} ${count + 1}` }, delay: 1000 });
+        return effects;
+    }
+
+    private transitionSeniorPosition(response: Extract<EventResponse, { type: 'seniorPosition' }>): EventEffect[] {
+        const effects: EventEffect[] = [
+            { type: 'patchStatus', status: { senior: { currentPosition: response.currentPosition, monsterDefeated: response.monsterDefeated, isFinished: response.isFinished } } },
+        ];
+        if (response.isFinished) {
+            effects.push({ type: 'registerTypeScheduler', commandType: 'event_seniorInit' });
+            return effects;
+        }
+        const nextMove = this.seniorNextMove(response);
+        effects.push({ type: 'scheduleCommand', command: { type: 'event_seniorMove', body: `${EVENT_COMMAND.seniorMove} ${nextMove}` }, delay: 1000 });
+        return effects;
+    }
+
+    private transitionMiningEvent(response: Extract<EventResponse, { type: 'miningEvent' }>, status: EventStatus, config: EventConfig): EventEffect[] {
+        const effects: EventEffect[] = [
+            { type: 'patchStatus', status: { mining: { shovelLevel: response.shovelLevel, bagLevel: response.bagLevel, stamina: response.stamina, ticket: response.ticket, output: response.output, capacity: response.capacity, shovelUpgradeCost: response.shovelUpgradeCost, bagUpgradeCost: response.bagUpgradeCost } } },
+        ];
+        const currentCapacity = status.mining?.currentCapacity || 0;
+        const minedCount = status.mining?.minedCount || 0;
+        if (response.stamina === 0) {
+            effects.push({ type: 'registerTypeScheduler', commandType: 'event_miningEvent' });
+            return effects;
+        }
+        if (minedCount < 5) {
+            if (response.shovelLevel < config.mining?.maxShovelLevel! && response.shovelUpgradeCost <= response.ticket)
+                effects.push({ type: 'scheduleCommand', command: { type: 'event_miningShovelUpgrade', body: EVENT_COMMAND.miningShovelUpgrade }, delay: 1000 });
+            else if (response.bagLevel < config.mining?.maxBagLevel! && response.bagUpgradeCost <= response.ticket)
+                effects.push({ type: 'scheduleCommand', command: { type: 'event_miningBagUpgrade', body: EVENT_COMMAND.miningBagUpgrade }, delay: 1000 });
+            else if (response.capacity - currentCapacity < response.output)
+                effects.push({ type: 'scheduleCommand', command: { type: 'event_miningSell', body: EVENT_COMMAND.miningSell }, delay: 1000 });
+            else
+                effects.push({ type: 'scheduleCommand', command: { type: 'event_mining', body: `${EVENT_COMMAND.mining} ${minedCount + 1}` }, delay: 1000 });
+        } else if (response.ticket >= 100) {
+            effects.push({ type: 'scheduleCommand', command: { type: 'event_miningExchange', body: `${EVENT_COMMAND.miningExchange} ${response.ticket}` }, delay: 1000 });
+        }
+        return effects;
+    }
+
+    private transitionMining(response: Extract<EventResponse, { type: 'mining' }>, status: EventStatus): EventEffect[] {
+        const minedCount = response.depth === 510 ? (status.mining?.minedCount || 0) + 1 : status.mining?.minedCount || 0;
+        return [
+            { type: 'patchStatus', status: { mining: { stamina: response.stamina, currentCapacity: response.currentCapacity, capacity: response.capacity, minedCount } } },
+            { type: 'registerTypeScheduler', commandType: 'event_miningEvent' },
+        ];
+    }
+
+    private seniorNextMove(response: Extract<EventResponse, { type: 'seniorPosition' }>): 1 | 2 | 3 | 4 {
+        const { currentPosition, gardenPosition, monsterPosition, monsterDefeated } = response;
+        if (gardenPosition.x !== -1 && gardenPosition.y !== -1)
+            return monsterDefeated
+                ? this.nextMove(currentPosition, gardenPosition, monsterPosition)
+                : this.nextMove(currentPosition, monsterPosition, gardenPosition);
+        return this.nextMove(currentPosition, { x: 0, y: 0 }, monsterPosition);
+    }
+
+    private emptyPosition(): Position {
+        return { x: -1, y: -1 };
+    }
+
+    private async applyEffect(effect: EventEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ event: effect.status });
+                break;
+            case 'scheduleCommand':
+                await instance.scheduleCommand(effect.command, effect.delay);
+                break;
+            case 'registerTypeScheduler':
+                this.registerTypeScheduler(instance, effect.commandType);
                 break;
         }
     }

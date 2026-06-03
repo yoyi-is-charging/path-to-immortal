@@ -1,24 +1,40 @@
-// src/commands/impl/ZooHandler.ts
-
-import { Command } from '../../server/types';
+import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
+import { readMonsterLayout, readNumberAfter } from '../../utils/FieldExtractor';
 
+type ZooStatus = NonNullable<Status['zoo']>;
+type ZooConfig = NonNullable<Config['zoo']>;
+type ZooChoice = NonNullable<ZooStatus['choice']>;
+
+type ZooResponse =
+    | { type: 'remaining'; remaining: number; hasVerticalMonsters: boolean; hasHorizontalKing: boolean; hasThirdMonster: boolean }
+    | { type: 'entered' }
+    | { type: 'finished' }
+    | { type: 'unmatched' };
+
+type ZooEffect =
+    | { type: 'patchStatus'; status: ZooStatus }
+    | { type: 'scheduleCommand'; command: Command; delay?: number }
+    | { type: 'registerScheduler' };
+
+const ZOO_COMMAND = {
+    enter: '进入妖兽园',
+    horizontal: '横扫',
+    vertical: '力劈',
+    escape: '逃跑',
+} as const;
 
 export default class ZooHandler implements CommandHandler {
     readonly category = 'zoo';
     readonly COMMAND_TYPE = new Map([
-        ['进入妖兽园', 'zoo'],
-        ['横扫', 'zoo'],
-        ['力劈', 'zoo'],
-        ['逃跑', 'zoo'],
+        [ZOO_COMMAND.enter, 'zoo'],
+        [ZOO_COMMAND.horizontal, 'zoo'],
+        [ZOO_COMMAND.vertical, 'zoo'],
+        [ZOO_COMMAND.escape, 'zoo'],
     ]);
     readonly RESPONSE_PATTERN = /剩余妖兽|仅可进入妖兽园1次|妖兽已过期|被消灭了|已进入妖兽园/;
-    readonly REMAINING_PATTERN = /剩余妖兽(?<remaining>\d+)/;
-    readonly ENTERED_PATTERN = /已进入妖兽园/;
-    readonly VERTICAL_PATTERN = /(?<monster_1>[^\(你]+)\(([0-9]+)\)\n(?<monster_2>[^\(你]+)\(([0-9]+)\)(\n(?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
-    readonly HORIZONTAL_PATTERN = /(?<monster_1>[^\(你]+)\(([0-9]+)\)((?<monster_2>[^\(你]+)\(([0-9]+)\))?((?<monster_3>[^\(你]+)\(([0-9]+)\))?/;
     readonly RETRY_THRESHOLD = 5;
 
     private retryCount = 0;
@@ -26,30 +42,10 @@ export default class ZooHandler implements CommandHandler {
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.zoo = instance.account.status.zoo || {};
         const config = instance.account.config.zoo!;
-        if (this.REMAINING_PATTERN.test(response)) {
-            const remaining = parseInt(response.match(this.REMAINING_PATTERN)!.groups!.remaining);
-            let choice: '横扫' | '力劈' | '逃跑' | undefined = undefined;
-            if (remaining > 0) {
-                const monstersVertical = response.match(this.VERTICAL_PATTERN)?.groups;
-                const monstersHorizontal = response.match(this.HORIZONTAL_PATTERN)?.groups;
-                choice = monstersVertical ? '力劈' : '横扫';
-                if (config.autoEscape && this.retryCount < this.RETRY_THRESHOLD && remaining > 3 && monstersHorizontal!.monster_1.match(/王/) && (monstersVertical?.monster_3 || monstersHorizontal?.monster_3))
-                    choice = '逃跑';
-                if (choice === '逃跑')
-                    this.retryCount++;
-                else
-                    this.retryCount = 0;
-            }
-            instance.updateStatus({ zoo: { inProgress: remaining > 0, isFinished: remaining === 0, remaining, choice } });
-            if (choice)
-                instance.scheduleCommand({ type: 'zoo', body: choice }, 1000);
-        } else if (this.ENTERED_PATTERN.test(response)) {
-            instance.updateStatus({ zoo: { inProgress: true, isFinished: false, remaining: undefined, choice: '逃跑' } });
-            instance.scheduleCommand({ type: 'zoo', body: '逃跑' }, 1000);
-        } else {
-            instance.updateStatus({ zoo: { inProgress: false, isFinished: true, remaining: 0, choice: undefined } });
-            this.registerScheduler(instance);
-        }
+        const zooResponse = this.parseResponse(response);
+        const effects = this.transition(zooResponse, config);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -65,8 +61,78 @@ export default class ZooHandler implements CommandHandler {
             type: 'zoo', body: async (instance: GameInstance) => {
                 await instance.waitForLevelUpdate();
                 const level = instance.account.status.personalInfo?.level!;
-                return `进入妖兽园 ${Math.floor((level - 10) / 9)}`;
+                return `${ZOO_COMMAND.enter} ${Math.floor((level - 10) / 9)}`;
             }, date: getDate({ ...config.time, dayOffset: instance.account.status.zoo?.isFinished ? 1 : 0 })
         });
+    }
+
+    private parseResponse(response: string): ZooResponse {
+        const remaining = readNumberAfter(response, '剩余妖兽');
+        if (remaining !== undefined) {
+            const monsterLayout = readMonsterLayout(response);
+            return {
+                type: 'remaining',
+                remaining,
+                ...monsterLayout,
+            };
+        }
+        if (response.includes('已进入妖兽园'))
+            return { type: 'entered' };
+        if (this.RESPONSE_PATTERN.test(response))
+            return { type: 'finished' };
+        return { type: 'unmatched' };
+    }
+
+    private transition(response: ZooResponse, config: ZooConfig): ZooEffect[] {
+        switch (response.type) {
+            case 'remaining': {
+                const choice = this.chooseAction(response, config);
+                const effects: ZooEffect[] = [
+                    { type: 'patchStatus', status: { inProgress: response.remaining > 0, isFinished: response.remaining === 0, remaining: response.remaining, choice } },
+                ];
+                if (choice)
+                    effects.push({ type: 'scheduleCommand', command: { type: 'zoo', body: choice }, delay: 1000 });
+                return effects;
+            }
+            case 'entered':
+                return [
+                    { type: 'patchStatus', status: { inProgress: true, isFinished: false, remaining: undefined, choice: ZOO_COMMAND.escape } },
+                    { type: 'scheduleCommand', command: { type: 'zoo', body: ZOO_COMMAND.escape }, delay: 1000 },
+                ];
+            case 'finished':
+                return [
+                    { type: 'patchStatus', status: { inProgress: false, isFinished: true, remaining: 0, choice: undefined } },
+                    { type: 'registerScheduler' },
+                ];
+            case 'unmatched':
+                return [];
+        }
+    }
+
+    private chooseAction(response: Extract<ZooResponse, { type: 'remaining' }>, config: ZooConfig): ZooChoice | undefined {
+        if (response.remaining <= 0)
+            return undefined;
+        let choice: ZooChoice = response.hasVerticalMonsters ? ZOO_COMMAND.vertical : ZOO_COMMAND.horizontal;
+        if (config.autoEscape && this.retryCount < this.RETRY_THRESHOLD && response.remaining > 3 && response.hasHorizontalKing && response.hasThirdMonster)
+            choice = ZOO_COMMAND.escape;
+        if (choice === ZOO_COMMAND.escape)
+            this.retryCount++;
+        else
+            this.retryCount = 0;
+        return choice;
+    }
+
+    private async applyEffect(effect: ZooEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ zoo: effect.status });
+                break;
+            case 'scheduleCommand':
+                await instance.scheduleCommand(effect.command, effect.delay);
+                break;
+            case 'registerScheduler':
+                this.registerScheduler(instance);
+                break;
+        }
     }
 }

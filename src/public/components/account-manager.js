@@ -15,86 +15,83 @@ export class AccountManager {
     async toggleAuth(accountId) {
         const account = this.getAccount(accountId);
         const action = !account.online ? 'login' : 'logout';
-        wsClient.request({ action, params: { accountId } })
-            .then(account => {
-                const accountIndex = this.accounts.findIndex(a => a.id === accountId);
-                this.accounts[accountIndex] = account;
-                eventBus.emit('statusUpdated', account);
-            })
-            .catch(error => console.error('Error toggling auth:', error));
+        const updatedAccount = await wsClient.request({ action, params: { accountId } });
+        this.upsertAccount(updatedAccount);
+        eventBus.emit('statusUpdated', updatedAccount);
+        return updatedAccount;
     }
 
     async createAccount(credentials) {
-        wsClient.request({ action: 'create', params: credentials })
-            .then(account => {
-                this.accounts.push(account);
-                eventBus.emit('accountLoaded', account);
-            })
-            .catch(error => console.error('Error creating account:', error));
+        const account = await wsClient.request({ action: 'create', params: credentials });
+        this.upsertAccount(account);
+        eventBus.emit('accountLoaded', account);
+        return account;
     }
 
     async deleteAccount(accountId) {
-        wsClient.request({ action: 'delete', params: { accountId } })
-            .then(account => {
-                this.accounts = this.accounts.filter(a => a.id !== account.id);
-                eventBus.emit('accountUnloaded', account);
-            })
-            .catch(error => console.error('Error deleting account:', error));
+        const account = await wsClient.request({ action: 'delete', params: { accountId } });
+        this.accounts = this.accounts.filter(a => a.id !== account.id);
+        eventBus.emit('accountUnloaded', account);
+        return account;
     }
 
     async updateSession(accountId) {
-        wsClient.request({ action: 'updateSession', params: { accountId } })
-            .then(account => {
-                const accountIndex = this.accounts.findIndex(a => a.id === accountId);
-                this.accounts[accountIndex] = account;
-                eventBus.emit('statusUpdated', account);
-            })
-            .catch(error => console.error('Error updating session:', error));
+        const account = await wsClient.request({ action: 'updateSession', params: { accountId } });
+        this.upsertAccount(account);
+        eventBus.emit('statusUpdated', account);
+        return account;
+    }
+
+    async clearSession(accountId) {
+        const account = await wsClient.request({ action: 'clearSession', params: { accountId } });
+        this.upsertAccount(account);
+        eventBus.emit('statusUpdated', account);
+        return account;
     }
 
     async patchStatus(accountId, patch) {
-        wsClient.request({ action: 'patchStatus', params: { accountId, patch } })
-            .then(account => {
-                const accountIndex = this.accounts.findIndex(a => a.id === accountId);
-                this.accounts[accountIndex] = account;
-                eventBus.emit('statusUpdated', account);
-            })
-            .catch(error => console.error('Error patching status:', error));
+        const account = await wsClient.request({ action: 'patchStatus', params: { accountId, patch } });
+        this.upsertAccount(account);
+        eventBus.emit('statusUpdated', account);
+        return account;
     }
 
     async patchConfig(accountId, patch) {
-        wsClient.request({ action: 'patchConfig', params: { accountId, patch } })
-            .then(account => {
-                const accountIndex = this.accounts.findIndex(a => a.id === accountId);
-                this.accounts[accountIndex] = account;
-                eventBus.emit('configUpdated', account);
-            })
-            .catch(error => console.error('Error patching config:', error));
+        const account = await wsClient.request({ action: 'patchConfig', params: { accountId, patch } });
+        this.upsertAccount(account);
+        eventBus.emit('configUpdated', account);
+        return account;
     }
 
     async loadAccounts() {
-        wsClient.request({ action: 'getAccounts' })
-            .then(accounts => {
-                this.accounts = accounts;
-                eventBus.emit('accountsLoaded', accounts);
-            })
-            .catch(error => console.error('Error loading accounts:', error));
+        const accounts = await wsClient.request({ action: 'getAccounts' });
+        this.accounts = accounts;
+        eventBus.emit('accountsLoaded', accounts);
+        return accounts;
     }
 
     async loadAccount(accountId) {
         const account = this.getAccount(accountId);
-        if (account) return;
-        wsClient.request({ action: 'getAccount', params: { accountId } })
-            .then(account => {
-                this.accounts.push(account);
-                eventBus.emit('accountLoaded', account);
-            })
-            .catch(error => console.error('Error loading account:', error));
+        if (account) {
+            eventBus.emit('accountLoaded', account);
+            return account;
+        }
+        const loadedAccount = await wsClient.request({ action: 'getAccount', params: { accountId } });
+        this.upsertAccount(loadedAccount);
+        eventBus.emit('accountLoaded', loadedAccount);
+        return loadedAccount;
     }
 
     async sendCommand(accountId, command) {
-        wsClient.request({ action: 'send', params: { accountId, command } })
-            .catch(error => console.error('Error sending command:', error));
+        return wsClient.request({ action: 'send', params: { accountId, command } });
+    }
+
+    upsertAccount(account) {
+        const accountIndex = this.accounts.findIndex(a => a.id === account.id);
+        if (accountIndex >= 0)
+            this.accounts[accountIndex] = account;
+        else
+            this.accounts.push(account);
     }
 }
 

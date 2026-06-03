@@ -5,6 +5,7 @@ import express from 'express';
 import { AccountManager } from './core/AccountManager';
 import { InstanceManager } from './core/InstanceManager';
 import { logger } from '../utils/logger';
+import { DebugLog } from '../utils/DebugLog';
 import path from 'path';
 import dotenv from 'dotenv';
 import { CommandFactory } from '../commands/CommandFactory';
@@ -18,6 +19,11 @@ import { Telegraf } from 'telegraf';
 async function main() {
 
     dotenv.config({ path: __dirname + '/../../.env' });
+    DebugLog.log('server', 'startup.begin', {
+        nodeEnv: process.env.NODE_ENV,
+        port: process.env.PORT || 3000,
+        debugEnabled: DebugLog.enabled(),
+    });
 
 
 
@@ -32,20 +38,47 @@ async function main() {
     }
 
     wss.on('connection', (ws, req) => {
+        DebugLog.log('ws', 'connection.open', { remoteAddress: req.socket.remoteAddress });
 
 
         ws.on('message', async (message) => {
-            logger.info(`Received message: ${message}`);
-            const data = JSON.parse(message.toString());
+            const startedAt = Date.now();
+            let data: any;
+            try {
+                data = JSON.parse(message.toString());
+            } catch (error) {
+                DebugLog.log('ws', 'request.invalidJson', { error, bytes: message.toString().length });
+                ws.send(JSON.stringify({ type: 'response', success: false, payload: 'Invalid JSON request' }));
+                return;
+            }
             const actionName: string = data.action;
             const params: object = data.params || {};
             const action = actions[actionName];
-            if (!action)
+            logger.info(`WebSocket action received: ${actionName}`);
+            DebugLog.log('ws', 'request.received', { requestId: data.requestId, actionName, params });
+            if (!action) {
+                DebugLog.log('ws', 'request.unknownAction', { requestId: data.requestId, actionName });
                 ws.send(JSON.stringify({ type: 'response', requestId: data.requestId, success: false, payload: `Action ${actionName} not found` }));
-            else
-                action(params)
-                    .then(response => ws.send(JSON.stringify({ type: 'response', requestId: data.requestId, success: true, payload: response })))
-                    .catch(error => ws.send(JSON.stringify({ type: 'response', requestId: data.requestId, success: false, payload: error.message })));
+                return;
+            }
+            try {
+                const response = await action(params);
+                DebugLog.log('ws', 'request.complete', {
+                    requestId: data.requestId,
+                    actionName,
+                    durationMs: Date.now() - startedAt,
+                    response,
+                });
+                ws.send(JSON.stringify({ type: 'response', requestId: data.requestId, success: true, payload: response }));
+            } catch (error) {
+                DebugLog.log('ws', 'request.failed', {
+                    requestId: data.requestId,
+                    actionName,
+                    durationMs: Date.now() - startedAt,
+                    error,
+                });
+                ws.send(JSON.stringify({ type: 'response', requestId: data.requestId, success: false, payload: (error as Error).message }));
+            }
         });
 
 
@@ -106,13 +139,23 @@ async function main() {
                 await AccountManager.removeAccount(accountId);
                 return account;
             },
+            clearSession: async ({ accountId }: { accountId: string }) => {
+                const account = AccountManager.getAccount(accountId);
+                if (account.online || InstanceManager.getInstance(accountId))
+                    throw new Error(`Account ${accountId} must be offline before clearing session`);
+                await AccountManager.clearSession(accountId);
+                return account;
+            },
             send: async ({ accountId, command }: { accountId: string, command: string }) => {
                 await InstanceManager.sendCommand(accountId, command);
                 return {};
             }
         };
 
-        const broadcast: (event: string, payload: object) => void = (event, payload) => ws.send(JSON.stringify({ type: 'broadcast', event, payload }));
+        const broadcast: (event: string, payload: object) => void = (event, payload) => {
+            DebugLog.log('ws', 'broadcast', { event, payload });
+            ws.send(JSON.stringify({ type: 'broadcast', event, payload }));
+        };
         const broadcastStatus: (account: Account) => void = (account) => broadcast('statusUpdated', account);
         const broadcastQRCode: ({ base64 }: { base64: string }) => void = ({ base64 }) => broadcast('qrcodeUpdated', { base64 });
         const broadcastSessionUpdate: ({ accountId, success }: { accountId: string, success: boolean }) => void = ({ accountId, success }) => broadcast('sessionUpdated', { id: accountId, success });
@@ -125,8 +168,11 @@ async function main() {
 
         const notify: ({ chatId, message }: { chatId: string, message: string }) => Promise<void> = async ({ chatId, message }) => {
             try {
+                DebugLog.log('notification', 'send.start', { chatId, message: DebugLog.preview(message) });
                 await bot!.telegram.sendMessage(chatId, message);
+                DebugLog.log('notification', 'send.complete', { chatId });
             } catch (error) {
+                DebugLog.log('notification', 'send.failed', { chatId, error });
                 logger.error(`Failed to send message to ${chatId}: ${error}`);
             }
         }
@@ -148,6 +194,7 @@ async function main() {
             EventBus.off('sessionUpdated', broadcastSessionUpdate);
             EventBus.off('notification', notify);
             logger.info(`WebSocket connection closed`);
+            DebugLog.log('ws', 'connection.closed', { remoteAddress: req.socket.remoteAddress });
         });
     });
 
@@ -176,6 +223,7 @@ async function main() {
         PORT,
         0, () => {
             logger.info(`Server is running on http://${getLocalIp()}:${PORT}`);
+            DebugLog.log('server', 'startup.complete', { url: `http://${getLocalIp()}:${PORT}` });
         });
 
     function getLocalIp() {

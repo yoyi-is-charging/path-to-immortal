@@ -4,6 +4,7 @@ import { StorageService } from './StorageService';
 import { Config, Account, Status } from '../types';
 import { EventBus } from './EventBus';
 import { merge } from '../../utils/ObjectUtils';
+import { DebugLog } from '../../utils/DebugLog';
 
 export class AccountManager {
     private static accounts: Account[] = [];
@@ -35,9 +36,14 @@ export class AccountManager {
         this.accounts.forEach(account => {
             account.config = merge(AccountManager.defaultConfig(), account.config);
         });
+        DebugLog.log('account', 'init.complete', {
+            accountCount: this.accounts.length,
+            accounts: this.accounts.map(account => DebugLog.account(account)),
+        });
     }
 
     static async createAccount(id: string, password?: string) {
+        DebugLog.log('account', 'create.request', { id, hasPassword: Boolean(password) });
         const existing = this.accounts.find(acc => acc.id === id);
         if (existing)
             throw new Error(`Account with id ${id} already exists`);
@@ -51,16 +57,34 @@ export class AccountManager {
         };
         this.accounts.push(newAccount);
         await this.persist();
+        DebugLog.log('account', 'create.complete', { account: DebugLog.account(newAccount) });
         return newAccount;
     }
 
     static async removeAccount(id: string) {
+        DebugLog.log('account', 'remove.request', { id });
         this.accounts = this.accounts.filter(acc => acc.id !== id);
         await this.persist();
+        DebugLog.log('account', 'remove.complete', { id, accountCount: this.accounts.length });
+    }
+
+    static async clearSession(id: string) {
+        DebugLog.log('account', 'clearSession.request', { id });
+        const account = this.getAccount(id);
+        if (account.online)
+            throw new Error(`Account ${id} must be offline before clearing session`);
+        account.session = undefined;
+        account.metadata.tinyid = undefined;
+        EventBus.emit('sessionUpdated', { accountId: id, success: false });
+        await this.persist();
+        DebugLog.log('account', 'clearSession.complete', { account: DebugLog.account(account) });
+        return account;
     }
 
     static async persist() {
+        DebugLog.log('account', 'persist.request', { accountCount: this.accounts.length });
         await StorageService.save(this.accounts);
+        DebugLog.log('account', 'persist.complete', { accountCount: this.accounts.length });
     }
 
     private static encryptPassword(password: string | undefined) {
@@ -87,17 +111,25 @@ export class AccountManager {
     }
 
     static async patchStatus(accountId: string, patch: Partial<Status>) {
+        DebugLog.log('account', 'patchStatus.request', DebugLog.statusPatch(accountId, patch));
         const account = this.getAccount(accountId);
         account.status = merge(account.status, patch);
         EventBus.emit('statusUpdated', account);
         account.metadata.lastUpdateTime = Date.now();
         await AccountManager.persist();
+        DebugLog.log('account', 'patchStatus.complete', {
+            accountId,
+            statusKeys: Object.keys(account.status || {}),
+            lastUpdateTime: new Date(account.metadata.lastUpdateTime).toISOString(),
+        });
     }
 
     static async patchConfig(accountId: string, patch: Partial<Config>) {
+        DebugLog.log('account', 'patchConfig.request', DebugLog.configPatch(accountId, patch));
         const account = this.getAccount(accountId);
         account.config = merge(account.config, patch);
         EventBus.emit('configUpdated', account);
         await AccountManager.persist();
+        DebugLog.log('account', 'patchConfig.complete', { account: DebugLog.account(account) });
     }
 }

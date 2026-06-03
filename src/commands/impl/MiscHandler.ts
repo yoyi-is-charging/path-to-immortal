@@ -1,11 +1,24 @@
 // src/commands/impl/MiscHandler.ts
 
-import { Command } from '../../server/types';
+import { Command, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
 import { logger } from '../../utils/logger';
 import { getDate } from '../../utils/TimeUtils';
+import { readAnswerIndex, readBracketValue, readFirstCount, readNumberAfter } from '../../utils/FieldExtractor';
 
+type MiscStatus = NonNullable<Status['misc']>;
+
+type MiscResponse = {
+    commandType: string;
+    text: string;
+};
+
+type MiscEffect =
+    | { type: 'patchStatus'; status: MiscStatus }
+    | { type: 'scheduleCommand'; command: Command; delay?: number }
+    | { type: 'registerTypeScheduler'; commandType: string }
+    | { type: 'logError'; message: string };
 
 export default class MiscHandler implements CommandHandler {
     readonly category = 'misc';
@@ -75,10 +88,7 @@ export default class MiscHandler implements CommandHandler {
     ])
     readonly ABODE_RECEIVE_PATTERN = /领取每日能量成功|已领过能量/;
     readonly KILL_PATTERN = /挑战一刀斩/;
-    readonly CHALLENGE_COUNT_PATTERN = /剩余挑战次数:(?<count>\d+)/;
     readonly FORGE_LIMIT_PATTERN = /炼器上限/;
-    readonly FORGE_COUNT_PATTERN = /次数(?<count>\d+)/;
-    readonly TOWER_COUNT_PATTERN = /(?<remain>\d+)\/(?<limit>\d+)/;
     readonly WORSHIP_PATTERN = /崇拜的目光|已膜拜/;
     readonly FIGHT_PATTERN = /试剑(成功|失败|过了)/;
     readonly FIGHT_FREQUENCY_PATTERN = /1小时内只能试剑1次/;
@@ -90,7 +100,6 @@ export default class MiscHandler implements CommandHandler {
     readonly FIGHT_PET_FINISHED_PATTERN = /每天最多对决/;
     readonly HELL_FINISHED_PATTERN = /府石已领取|已领过寻宝府石/;
     readonly LEVEL_UP_UNAVAILABLE_PATTERN = /无法提升/;
-    readonly TASK_TYPE_PATTERN = /【(?<type>.+?)】/;
     readonly TASK_DATABASE = new Map([
         ['厨房帮工', new Map([
             ['洗菜', /炒出来/],
@@ -283,226 +292,209 @@ export default class MiscHandler implements CommandHandler {
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.misc = instance.account.status.misc || {};
+        const miscResponse = this.parseResponse(command, response);
+        const effects = this.transition(miscResponse, instance);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
+    }
+
+    private parseResponse(command: Command, response: string): MiscResponse {
+        return { commandType: command.type, text: response };
+    }
+
+    private transition(event: MiscResponse, instance: GameInstance): MiscEffect[] {
+        const response = event.text;
+        const commandType = event.commandType;
+        const status = instance.account.status.misc!;
         const config = instance.account.config.misc!;
-        switch (command.type) {
+        switch (commandType) {
             case 'misc_signIn':
-                instance.updateStatus({ misc: { signIn: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ signIn: true }, commandType);
             case 'misc_sectSignIn':
-                instance.updateStatus({ misc: { sect: { signIn: true } } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ sect: { signIn: true } }, commandType);
             case 'misc_sendEnergy':
-                instance.updateStatus({ misc: { sendEnergy: true } });
-                this.registerTypeScheduler(instance, command.type);
-                return;
+                return this.done({ sendEnergy: true }, commandType);
             case 'misc_receiveEnergy':
-                instance.updateStatus({ misc: { receiveEnergy: true } });
-                instance.scheduleCommand({ type: 'misc_abode', body: '全部转动' });
-                break;
+                return [
+                    { type: 'patchStatus', status: { receiveEnergy: true } },
+                    { type: 'scheduleCommand', command: { type: 'misc_abode', body: '全部转动' } },
+                ];
             case 'misc_abode':
-                if (this.ABODE_RECEIVE_PATTERN.test(response)) {
-                    instance.updateStatus({ misc: { abode: { inProgress: true, isFinished: false } } });
-                    instance.scheduleCommand({ type: 'misc_abode', body: '全部转动' });
-                } else {
-                    instance.updateStatus({ misc: { abode: { inProgress: false, isFinished: true } } });
-                    this.registerTypeScheduler(instance, command.type);
-                }
-                break;
+                return this.ABODE_RECEIVE_PATTERN.test(response)
+                    ? [
+                        { type: 'patchStatus', status: { abode: { inProgress: true, isFinished: false } } },
+                        { type: 'scheduleCommand', command: { type: 'misc_abode', body: '全部转动' } },
+                    ]
+                    : [
+                        { type: 'patchStatus', status: { abode: { inProgress: false, isFinished: true } } },
+                        { type: 'registerTypeScheduler', commandType },
+                    ];
             case 'misc_transmission':
-                instance.updateStatus({ misc: { transmission: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ transmission: true }, commandType);
             case 'misc_receiveTransmission':
-                instance.updateStatus({ misc: { receiveTransmission: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ receiveTransmission: true }, commandType);
             case 'misc_receiveTaskReward':
-                instance.updateStatus({ misc: { receiveTaskReward: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ receiveTaskReward: true }, commandType);
             case 'misc_receiveBlessing':
-                instance.updateStatus({ misc: { receiveBlessing: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ receiveBlessing: true }, commandType);
             case 'misc_kill':
-                let killCount = instance.account.status.misc.kill?.count || 0;
-                killCount = this.KILL_PATTERN.test(response) ? killCount + 1 : 10;
-                instance.updateStatus({ misc: { kill: { count: killCount } } });
-                if (killCount < 10)
-                    instance.scheduleCommand({ type: 'misc_kill', body: '砍一刀' }, 1000);
-                else
-                    this.registerTypeScheduler(instance, command.type);
-                break;
-            case 'misc_challenge':
-                let challengeCount = instance.account.status.misc.challenge?.count || 0;
-                challengeCount = 3 - parseInt(response.match(this.CHALLENGE_COUNT_PATTERN)?.groups?.count! || '0');
-                instance.updateStatus({ misc: { challenge: { count: challengeCount } } });
-                if (challengeCount < 3)
-                    instance.scheduleCommand({ type: 'misc_challenge', body: '挑战噬魂兽' }, 1000);
-                else
-                    this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.transitionCountLoop('kill', this.KILL_PATTERN.test(response) ? (status.kill?.count || 0) + 1 : 10, 10, 'misc_kill', '砍一刀');
+            case 'misc_challenge': {
+                const count = 3 - (readNumberAfter(response, '剩余挑战次数:') ?? 0);
+                return this.transitionCountLoop('challenge', count, 3, 'misc_challenge', '挑战噬魂兽');
+            }
             case 'misc_forge':
-                const forgeLimit = config.forgeLimit!;
-                let currentType: number = instance.account.status.misc.forge?.currentType || config.forgeTypes![0];
-                let forgeCount = instance.account.status.misc.forge?.count || 0;
-                if (this.FORGE_LIMIT_PATTERN.test(response)) {
-                    const index = config.forgeTypes!.indexOf(currentType);
-                    if (index === config.forgeTypes!.length - 1)
-                        forgeCount = forgeLimit;
-                    else
-                        currentType = config.forgeTypes![index + 1];
-                } else
-                    forgeCount = parseInt(response.match(this.FORGE_COUNT_PATTERN)!.groups!.count);
-                instance.updateStatus({ misc: { forge: { count: forgeCount, currentType } } });
-                if (forgeCount < forgeLimit)
-                    instance.scheduleCommand({ type: 'misc_forge', body: `锻造 ${currentType}` }, 1000);
-                else
-                    this.registerTypeScheduler(instance, command.type);
-                break;
-            case 'misc_tower':
-                let towerCount = instance.account.status.misc.tower?.count || 0;
-                if (this.TOWER_COUNT_PATTERN.test(response)) {
-                    const { remain, limit } = response.match(this.TOWER_COUNT_PATTERN)!.groups!;
-                    towerCount = parseInt(limit) - parseInt(remain);
-                } else
-                    towerCount = 50;
-                instance.updateStatus({ misc: { tower: { count: towerCount } } });
-                if (towerCount < 5)
-                    instance.scheduleCommand({ type: 'misc_tower', body: '塔攻击' }, 1000);
-                else
-                    this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.transitionForge(response, status, config);
+            case 'misc_tower': {
+                const towerCount = readFirstCount(response);
+                const count = towerCount ? towerCount.limit - towerCount.current : 50;
+                return this.transitionCountLoop('tower', count, 5, 'misc_tower', '塔攻击');
+            }
             case 'misc_worship':
-                let worshipCount = instance.account.status.misc.worship?.count || 0;
-                worshipCount = this.WORSHIP_PATTERN.test(response) ? worshipCount + 1 : 10;
-                instance.updateStatus({ misc: { worship: { count: worshipCount } } });
-                if (worshipCount < 10)
-                    instance.scheduleCommand({ type: 'misc_worship', body: `膜拜排位 ${worshipCount + 1}` }, 1000);
-                else
-                    this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.transitionCountLoop('worship', this.WORSHIP_PATTERN.test(response) ? (status.worship?.count || 0) + 1 : 10, 10, 'misc_worship', count => `膜拜排位 ${count + 1}`);
             case 'misc_fightRandom':
-                let fightRandomCount = instance.account.status.misc.fight?.randomCount || 0;
-                fightRandomCount = this.FIGHT_PATTERN.test(response) ? fightRandomCount + 1 : 25;
-                instance.updateStatus({ misc: { fight: { randomCount: fightRandomCount } } });
-                if (fightRandomCount < 10)
-                    instance.scheduleCommand({ type: 'misc_fightRandom', body: `随机试剑 ${fightRandomCount + 1}` }, 1000);
-                else
-                    instance.scheduleCommand({ type: 'misc_fightMaster', body: '师门切磋 1' }, 1000);
-                break;
+                return this.transitionFightChain('randomCount', this.FIGHT_PATTERN.test(response) ? (status.fight?.randomCount || 0) + 1 : 25, 10, 'misc_fightRandom', count => `随机试剑 ${count + 1}`, { type: 'misc_fightMaster', body: '师门切磋 1' });
             case 'misc_fightMaster':
-                let fightMasterCount = instance.account.status.misc.fight?.masterCount || 0;
-                fightMasterCount = this.FIGHT_MASTER_PATTERN.test(response) ? fightMasterCount + 1 : 10;
-                instance.updateStatus({ misc: { fight: { masterCount: fightMasterCount } } });
-                if (fightMasterCount < 10)
-                    instance.scheduleCommand({ type: 'misc_fightMaster', body: `师门切磋 ${fightMasterCount + 1}` }, 1000);
-                else
-                    instance.scheduleCommand({ type: 'misc_challengeSect', body: '宗门挑战 1' }, 1000);
-                break;
+                return this.transitionFightChain('masterCount', this.FIGHT_MASTER_PATTERN.test(response) ? (status.fight?.masterCount || 0) + 1 : 10, 10, 'misc_fightMaster', count => `师门切磋 ${count + 1}`, { type: 'misc_challengeSect', body: '宗门挑战 1' });
             case 'misc_challengeSect':
-                let challengeSectCount = instance.account.status.misc.fight?.challengeSectCount || 0;
-                challengeSectCount = this.CHALLENGE_SECT_PATTERN.test(response) ? challengeSectCount + 1 : 10;
-                instance.updateStatus({ misc: { fight: { challengeSectCount } } });
-                if (challengeSectCount < 10)
-                    instance.scheduleCommand({ type: 'misc_challengeSect', body: `宗门挑战 ${challengeSectCount + 1}` }, 1000);
-                else
-                    instance.scheduleCommand({ type: 'misc_fightSect', body: '宗门切磋 1' }, 1000);
-                break;
+                return this.transitionFightChain('challengeSectCount', this.CHALLENGE_SECT_PATTERN.test(response) ? (status.fight?.challengeSectCount || 0) + 1 : 10, 10, 'misc_challengeSect', count => `宗门挑战 ${count + 1}`, { type: 'misc_fightSect', body: '宗门切磋 1' });
             case 'misc_fightSect':
-                let sectCount = instance.account.status.misc.fight?.sectCount || 0;
-                sectCount = this.FIGHT_SECT_PATTERN.test(response) ? sectCount + 1 : 10;
-                instance.updateStatus({ misc: { fight: { sectCount } } });
-                if (sectCount < 10)
-                    instance.scheduleCommand({ type: 'misc_fightSect', body: `宗门切磋 ${sectCount + 1}` }, 1000);
-                else
-                    this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.transitionFightChain('sectCount', this.FIGHT_SECT_PATTERN.test(response) ? (status.fight?.sectCount || 0) + 1 : 10, 10, 'misc_fightSect', count => `宗门切磋 ${count + 1}`);
             case 'misc_fight':
-                let nextTime = getDate({ dayOffset: 1 });
-                if (this.FIGHT_PATTERN.test(response) || this.FIGHT_FREQUENCY_PATTERN.test(response))
-                    nextTime = new Date(Date.now() + 60 * 60 * 1000);
-                else if (this.FIGHT_NOT_AVAILABLE_PATTERN.test(response))
-                    nextTime = getDate({ hours: 23 });
-                instance.updateStatus({ misc: { fight: { nextTime } } });
-                instance.scheduleCommand({ type: 'misc_fight', body: [{ str: '试剑', bytes_pb_reserve: null }, { str: config.fight?.target?.str!, bytes_pb_reserve: config.fight?.target?.bytes_pb_reserve! }], date: nextTime });
-                break;
+                return this.transitionFight(response, config);
             case 'misc_sectTask':
-                if (this.TASK_TYPE_PATTERN.test(response)) {
-                    const taskType = response.match(this.TASK_TYPE_PATTERN)!.groups!.type;
-                    const task = this.TASK_DATABASE.get(taskType);
-                    let index: number | undefined = undefined;
-                    if (!task) {
-                        logger.error(`Task type ${taskType} not found, using default index 1`);
-                        index = 1;
-                    } else {
-                        const answer = [...task.entries()].find(([key, value]) => value.test(response))?.[0];
-                        if (answer) {
-                            const ANSWER_PATTERN = new RegExp(`(?<index>\\d+):${answer}\\n`);
-                            index = parseInt(response.match(ANSWER_PATTERN)!.groups!.index);
-                        } else {
-                            logger.error(`Answer for task type ${taskType} not found, using default index 1`);
-                            index = 1;
-                        }
-                    }
-                    instance.updateStatus({ misc: { sect: { task: { inProgress: true, isFinished: false } } } });
-                    instance.scheduleCommand({ type: 'misc_sectTask', body: `任务选择 ${index}` }, 1000);
-                } else {
-                    instance.updateStatus({ misc: { sect: { task: { inProgress: false, isFinished: true } } } });
-                    this.registerTypeScheduler(instance, command.type);
-                }
-                break;
-            case 'misc_battleSignUp':
-                instance.account.status.misc.battleSignUp = instance.account.status.misc.battleSignUp || {};
-                if (!this.SIGNUP_FINISHED_PATTERN.test(response))
-                    instance.updateStatus({ misc: { battleSignUp: { inProgress: true, isFinished: false, nextTime: getDate({ hours: new Date().getHours() + 1, seconds: 5 }) } } });
-                else
-                    instance.updateStatus({ misc: { battleSignUp: { inProgress: false, isFinished: true, nextTime: getDate({ seconds: 5, dayOffset: 1 }) } } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
-            case 'misc_fightPet':
-                instance.account.status.misc.fightPet = instance.account.status.misc.fightPet || {};
-                if (!this.FIGHT_PET_FINISHED_PATTERN.test(response))
-                    instance.updateStatus({ misc: { fightPet: { inProgress: true, isFinished: false, nextTime: new Date(Date.now() + 10 * 60 * 1000) } } });
-                else
-                    instance.updateStatus({ misc: { fightPet: { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) } } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
-            case 'misc_hell':
-                instance.account.status.misc.hell = instance.account.status.misc.hell || {};
-                if (!this.HELL_FINISHED_PATTERN.test(response))
-                    instance.updateStatus({ misc: { hell: { inProgress: true, isFinished: false } } });
-                else
-                    instance.updateStatus({ misc: { hell: { inProgress: false, isFinished: true } } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.transitionSectTask(response, commandType);
+            case 'misc_battleSignUp': {
+                const next = !this.SIGNUP_FINISHED_PATTERN.test(response)
+                    ? { inProgress: true, isFinished: false, nextTime: getDate({ hours: new Date().getHours() + 1, seconds: 5 }) }
+                    : { inProgress: false, isFinished: true, nextTime: getDate({ seconds: 5, dayOffset: 1 }) };
+                return this.done({ battleSignUp: next }, commandType);
+            }
+            case 'misc_fightPet': {
+                const next = !this.FIGHT_PET_FINISHED_PATTERN.test(response)
+                    ? { inProgress: true, isFinished: false, nextTime: new Date(Date.now() + 10 * 60 * 1000) }
+                    : { inProgress: false, isFinished: true, nextTime: getDate({ dayOffset: 1 }) };
+                return this.done({ fightPet: next }, commandType);
+            }
+            case 'misc_hell': {
+                const next = !this.HELL_FINISHED_PATTERN.test(response)
+                    ? { inProgress: true, isFinished: false }
+                    : { inProgress: false, isFinished: true };
+                return this.done({ hell: next }, commandType);
+            }
             case 'misc_gift':
-                instance.scheduleCommand({ type: 'misc_giftConfirm', body: '确定送礼物' }, 1000);
-                break;
+                return [{ type: 'scheduleCommand', command: { type: 'misc_giftConfirm', body: '确定送礼物' }, delay: 1000 }];
             case 'misc_giftConfirm':
-                instance.updateStatus({ misc: { gift: true } });
-                this.registerTypeScheduler(instance, 'misc_gift');
-                break;
+                return this.done({ gift: true }, 'misc_gift');
             case 'misc_sectBlessing':
-                instance.updateStatus({ misc: { sect: { blessing: true } } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ sect: { blessing: true } }, commandType);
             case 'misc_subscribe':
-                instance.updateStatus({ misc: { subscribe: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ subscribe: true }, commandType);
             case 'misc_fortune':
-                instance.updateStatus({ misc: { fortune: true } });
-                this.registerTypeScheduler(instance, command.type);
-                break;
+                return this.done({ fortune: true }, commandType);
             case 'misc_levelUp':
-                if (this.LEVEL_UP_UNAVAILABLE_PATTERN.test(response) || !config.levelUp?.toMax)
-                    instance.updateStatus({ misc: { levelUp: { inProgress: false, isFinished: true } } });
-                else
-                    instance.updateStatus({ misc: { levelUp: { inProgress: true, isFinished: false } } });
-                this.registerTypeScheduler(instance, command.type);
+                return this.done({ levelUp: { inProgress: !(this.LEVEL_UP_UNAVAILABLE_PATTERN.test(response) || !config.levelUp?.toMax), isFinished: this.LEVEL_UP_UNAVAILABLE_PATTERN.test(response) || !config.levelUp?.toMax } }, commandType);
+            default:
+                return [];
+        }
+    }
+
+    private done(status: MiscStatus, commandType: string): MiscEffect[] {
+        return [
+            { type: 'patchStatus', status },
+            { type: 'registerTypeScheduler', commandType },
+        ];
+    }
+
+    private transitionCountLoop(key: 'kill' | 'challenge' | 'tower' | 'worship', count: number, limit: number, commandType: string, body: string | ((count: number) => string)): MiscEffect[] {
+        const status = { [key]: { count } } as MiscStatus;
+        const effects: MiscEffect[] = [{ type: 'patchStatus', status }];
+        if (count < limit)
+            effects.push({ type: 'scheduleCommand', command: { type: commandType, body: typeof body === 'function' ? body(count) : body }, delay: 1000 });
+        else
+            effects.push({ type: 'registerTypeScheduler', commandType });
+        return effects;
+    }
+
+    private transitionForge(response: string, status: MiscStatus, config: NonNullable<GameInstance['account']['config']['misc']>): MiscEffect[] {
+        const forgeLimit = config.forgeLimit!;
+        let currentType = status.forge?.currentType || config.forgeTypes![0];
+        let count = status.forge?.count || 0;
+        if (this.FORGE_LIMIT_PATTERN.test(response)) {
+            const index = config.forgeTypes!.indexOf(currentType);
+            if (index === config.forgeTypes!.length - 1)
+                count = forgeLimit;
+            else
+                currentType = config.forgeTypes![index + 1];
+        } else {
+            count = readNumberAfter(response, '次数') ?? count;
+        }
+        const effects: MiscEffect[] = [{ type: 'patchStatus', status: { forge: { count, currentType } } }];
+        if (count < forgeLimit)
+            effects.push({ type: 'scheduleCommand', command: { type: 'misc_forge', body: `锻造 ${currentType}` }, delay: 1000 });
+        else
+            effects.push({ type: 'registerTypeScheduler', commandType: 'misc_forge' });
+        return effects;
+    }
+
+    private transitionFightChain(key: 'randomCount' | 'masterCount' | 'challengeSectCount' | 'sectCount', count: number, limit: number, commandType: string, body: (count: number) => string, nextCommand?: Command): MiscEffect[] {
+        const effects: MiscEffect[] = [{ type: 'patchStatus', status: { fight: { [key]: count } } as MiscStatus }];
+        if (count < limit)
+            effects.push({ type: 'scheduleCommand', command: { type: commandType, body: body(count) }, delay: 1000 });
+        else if (nextCommand)
+            effects.push({ type: 'scheduleCommand', command: nextCommand, delay: 1000 });
+        else
+            effects.push({ type: 'registerTypeScheduler', commandType });
+        return effects;
+    }
+
+    private transitionFight(response: string, config: NonNullable<GameInstance['account']['config']['misc']>): MiscEffect[] {
+        let nextTime = getDate({ dayOffset: 1 });
+        if (this.FIGHT_PATTERN.test(response) || this.FIGHT_FREQUENCY_PATTERN.test(response))
+            nextTime = new Date(Date.now() + 60 * 60 * 1000);
+        else if (this.FIGHT_NOT_AVAILABLE_PATTERN.test(response))
+            nextTime = getDate({ hours: 23 });
+        return [
+            { type: 'patchStatus', status: { fight: { nextTime } } },
+            { type: 'scheduleCommand', command: { type: 'misc_fight', body: [{ str: '试剑', bytes_pb_reserve: null }, { str: config.fight?.target?.str!, bytes_pb_reserve: config.fight?.target?.bytes_pb_reserve! }], date: nextTime } },
+        ];
+    }
+
+    private transitionSectTask(response: string, commandType: string): MiscEffect[] {
+        const taskType = readBracketValue(response);
+        if (!taskType)
+            return this.done({ sect: { task: { inProgress: false, isFinished: true } } }, commandType);
+        const { index, errors } = this.resolveTaskAnswer(taskType, response);
+        return [
+            ...errors.map(message => ({ type: 'logError', message }) as MiscEffect),
+            { type: 'patchStatus', status: { sect: { task: { inProgress: true, isFinished: false } } } },
+            { type: 'scheduleCommand', command: { type: 'misc_sectTask', body: `任务选择 ${index}` }, delay: 1000 },
+        ];
+    }
+
+    private resolveTaskAnswer(taskType: string, response: string): { index: number; errors: string[] } {
+        const task = this.TASK_DATABASE.get(taskType);
+        if (!task)
+            return { index: 1, errors: [`Task type ${taskType} not found, using default index 1`] };
+        const answer = [...task.entries()].find(([, value]) => value.test(response))?.[0];
+        if (!answer)
+            return { index: 1, errors: [`Answer for task type ${taskType} not found, using default index 1`] };
+        return { index: readAnswerIndex(response, answer) ?? 1, errors: [] };
+    }
+
+    private async applyEffect(effect: MiscEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ misc: effect.status });
+                break;
+            case 'scheduleCommand':
+                await instance.scheduleCommand(effect.command, effect.delay);
+                break;
+            case 'registerTypeScheduler':
+                this.registerTypeScheduler(instance, effect.commandType);
+                break;
+            case 'logError':
+                logger.error(effect.message);
                 break;
         }
     }

@@ -1,9 +1,15 @@
 // src/commands/impl/FortuneHandler.ts
 
 import { GameInstance } from "../../server/core/GameInstance";
-import { Command } from "../../server/types";
+import { Command, Status } from "../../server/types";
 import { getDate } from "../../utils/TimeUtils";
 import { CommandHandler } from "../CommandHandler";
+
+type FortuneStatus = NonNullable<Status['fortune']>;
+type FortuneResponse = { type: 'completed'; commandType: string };
+type FortuneEffect =
+    | { type: 'patchStatus'; status: FortuneStatus }
+    | { type: 'registerTypeScheduler'; commandType: string };
 
 export default class FortuneHandler implements CommandHandler {
     readonly category = 'fortune';
@@ -31,34 +37,10 @@ export default class FortuneHandler implements CommandHandler {
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.fortune = instance.account.status.fortune || {};
-        switch (command.type) {
-            case 'fortune_occupation':
-                instance.updateStatus({ fortune: { occupation: true } });
-                break;
-            case 'fortune_draw':
-                const drawCount = (instance.account.status.fortune.drawCount || 0) + 1;
-                instance.updateStatus({ fortune: { drawCount } });
-                break;
-            case 'fortune_realmWar':
-                instance.updateStatus({ fortune: { realmWar: true } });
-                break;
-            case 'fortune_levelWar':
-                instance.updateStatus({ fortune: { levelWar: true } });
-                break;
-            case 'fortune_sectWar':
-                instance.updateStatus({ fortune: { sectWar: true } });
-                break;
-            case 'fortune_daoWar':
-                instance.updateStatus({ fortune: { daoWar: true } });
-                break;
-            case 'fortune_serverWar':
-                instance.updateStatus({ fortune: { serverWar: true } });
-                break;
-            case 'fortune_stateWar':
-                instance.updateStatus({ fortune: { stateWar: true } });
-                break;
-        }
-        this.registerTypeScheduler(instance, command.type);
+        const fortuneResponse = this.parseResponse(command);
+        const effects = this.transition(instance.account.status.fortune, fortuneResponse);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -103,6 +85,51 @@ export default class FortuneHandler implements CommandHandler {
                 break;
             case 'fortune_stateWar':
                 instance.scheduleCommand({ type, body: `参加同境混战`, date: getDate({ ...config.time, dayOffset: status?.stateWar ? 1 : 0 }) });
+                break;
+        }
+    }
+
+    private parseResponse(command: Command): FortuneResponse {
+        return { type: 'completed', commandType: command.type };
+    }
+
+    private transition(status: FortuneStatus, response: FortuneResponse): FortuneEffect[] {
+        return [
+            { type: 'patchStatus', status: this.statusPatch(status, response.commandType) },
+            { type: 'registerTypeScheduler', commandType: response.commandType },
+        ];
+    }
+
+    private statusPatch(status: FortuneStatus, commandType: string): FortuneStatus {
+        switch (commandType) {
+            case 'fortune_occupation':
+                return { occupation: true };
+            case 'fortune_draw':
+                return { drawCount: (status.drawCount || 0) + 1 };
+            case 'fortune_realmWar':
+                return { realmWar: true };
+            case 'fortune_levelWar':
+                return { levelWar: true };
+            case 'fortune_sectWar':
+                return { sectWar: true };
+            case 'fortune_daoWar':
+                return { daoWar: true };
+            case 'fortune_serverWar':
+                return { serverWar: true };
+            case 'fortune_stateWar':
+                return { stateWar: true };
+            default:
+                return {};
+        }
+    }
+
+    private async applyEffect(effect: FortuneEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ fortune: effect.status });
+                break;
+            case 'registerTypeScheduler':
+                this.registerTypeScheduler(instance, effect.commandType);
                 break;
         }
     }

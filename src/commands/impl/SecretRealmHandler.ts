@@ -1,45 +1,47 @@
 // src/commands/impl/SecretRealmHandler.ts
 
-import { Command } from '../../server/types';
+import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
+import { readLineValue, readSkillOptions } from '../../utils/FieldExtractor';
 
+type SecretRealmStatus = NonNullable<Status['secretRealm']>;
+type SecretRealmConfig = NonNullable<Config['secretRealm']>;
+type SecretRealmSkill = Required<NonNullable<SecretRealmStatus['skill']>>;
+type SecretRealmSkillType = SecretRealmSkill['type'];
+
+type SecretRealmResponse =
+    | { type: 'skillOptions'; monsterLevel: string; skills: SecretRealmSkill[] }
+    | { type: 'entered' }
+    | { type: 'finished' }
+    | { type: 'unmatched' };
+
+type SecretRealmEffect =
+    | { type: 'patchStatus'; status: SecretRealmStatus }
+    | { type: 'scheduleCommand'; command: Command; delay?: number }
+    | { type: 'registerScheduler' };
+
+const SECRET_REALM_COMMAND = {
+    enter: '进入秘境',
+    select: '秘境选择',
+} as const;
 
 export default class SecretRealmHandler implements CommandHandler {
     readonly category = 'secretRealm';
     readonly COMMAND_TYPE = new Map([
-        ['进入秘境', 'secretRealm_enter'],
-        ['秘境选择', 'secretRealm_select'],
+        [SECRET_REALM_COMMAND.enter, 'secretRealm_enter'],
+        [SECRET_REALM_COMMAND.select, 'secretRealm_select'],
     ]);
     readonly RESPONSE_PATTERN = /注意选择合适的技能|仅可进入秘境1次|可以选择以下技能|今日本层秘境魔物已全部清除|秘境选择已过期|已进入秘境/;
-    readonly MONSTER_PATTERN = /魔物境界:(?<monsterLevel>.*)/;
-    readonly ENTERED_PATTERN = /已进入秘境/;
-    readonly SKILL_PATTERN = /(?<index>\d+):(?<name>[^\(]*)\((?<type>[^\+]*)\+(?<strength>\d+)[%次]\)/;
-    readonly SKILL_PATTERN_GLOBAL = /(?<index>\d+):(?<name>[^\(]*)\((?<type>[^\+]*)\+(?<strength>\d+)[%次]\)/g;
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.secretRealm = instance.account.status.secretRealm || {};
         const config = instance.account.config.secretRealm!;
-        if (this.MONSTER_PATTERN.test(response)) {
-            const monsterLevel = response.match(this.MONSTER_PATTERN)!.groups!.monsterLevel;
-            const skillList = response.matchAll(this.SKILL_PATTERN_GLOBAL);
-            const skills = Array.from(skillList).map((match) => ({
-                index: parseInt(match.groups!.index) as 1 | 2 | 3,
-                name: match.groups!.name.trim(),
-                type: match.groups!.type.trim() as '攻击' | '防御' | '血量' | '免伤',
-                strength: parseInt(match.groups!.strength)
-            }));
-            const selectedSkill = config.skillTypePriority!.map(type => skills.find(skill => skill.type === type)).filter(skill => skill !== undefined)[0];
-            instance.updateStatus({ secretRealm: { inProgress: true, isFinished: false, monsterLevel, skill: selectedSkill } });
-            instance.scheduleCommand({ type: 'secretRealm_select', body: `秘境选择 ${selectedSkill.index}` }, 1000);
-        } else if (this.ENTERED_PATTERN.test(response)) {
-            instance.updateStatus({ secretRealm: { inProgress: true, isFinished: false, monsterLevel: undefined, skill: undefined } });
-            instance.scheduleCommand({ type: 'secretRealm_select', body: `秘境选择 1` }, 1000);
-        } else {
-            instance.updateStatus({ secretRealm: { inProgress: false, isFinished: true, monsterLevel: undefined, skill: undefined } });
-            this.registerScheduler(instance);
-        }
+        const secretRealmResponse = this.parseResponse(response);
+        const effects = this.transition(secretRealmResponse, config);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -59,5 +61,70 @@ export default class SecretRealmHandler implements CommandHandler {
                 return `进入秘境 ${Math.floor((level - 28) / 18)}`;
             }, date: getDate({ ...config.time, dayOffset: instance.account.status.secretRealm?.isFinished ? 1 : 0 })
         });
+    }
+
+    private parseResponse(response: string): SecretRealmResponse {
+        const monsterLevel = readLineValue(response, '魔物境界:');
+        if (monsterLevel) {
+            return {
+                type: 'skillOptions',
+                monsterLevel,
+                skills: readSkillOptions(response).map(skill => ({
+                    ...skill,
+                    index: skill.index as 1 | 2 | 3,
+                    type: skill.type as SecretRealmSkillType,
+                })),
+            };
+        }
+        if (response.includes('已进入秘境'))
+            return { type: 'entered' };
+        if (this.RESPONSE_PATTERN.test(response))
+            return { type: 'finished' };
+        return { type: 'unmatched' };
+    }
+
+    private transition(response: SecretRealmResponse, config: SecretRealmConfig): SecretRealmEffect[] {
+        switch (response.type) {
+            case 'skillOptions': {
+                const selectedSkill = this.selectSkill(response.skills, config.skillTypePriority);
+                return [
+                    { type: 'patchStatus', status: { inProgress: true, isFinished: false, monsterLevel: response.monsterLevel, skill: selectedSkill } },
+                    { type: 'scheduleCommand', command: { type: 'secretRealm_select', body: `${SECRET_REALM_COMMAND.select} ${selectedSkill?.index ?? 1}` }, delay: 1000 },
+                ];
+            }
+            case 'entered':
+                return [
+                    { type: 'patchStatus', status: { inProgress: true, isFinished: false, monsterLevel: undefined, skill: undefined } },
+                    { type: 'scheduleCommand', command: { type: 'secretRealm_select', body: `${SECRET_REALM_COMMAND.select} 1` }, delay: 1000 },
+                ];
+            case 'finished':
+                return [
+                    { type: 'patchStatus', status: { inProgress: false, isFinished: true, monsterLevel: undefined, skill: undefined } },
+                    { type: 'registerScheduler' },
+                ];
+            case 'unmatched':
+                return [];
+        }
+    }
+
+    private selectSkill(skills: SecretRealmSkill[], priority: string[] = []): SecretRealmSkill | undefined {
+        return priority
+            .map(type => skills.find(skill => skill.type === type))
+            .find((skill): skill is SecretRealmSkill => skill !== undefined)
+            ?? skills[0];
+    }
+
+    private async applyEffect(effect: SecretRealmEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ secretRealm: effect.status });
+                break;
+            case 'scheduleCommand':
+                await instance.scheduleCommand(effect.command, effect.delay);
+                break;
+            case 'registerScheduler':
+                this.registerScheduler(instance);
+                break;
+        }
     }
 }

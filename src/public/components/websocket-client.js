@@ -77,6 +77,8 @@ export class WebSocketClient {
      */
     handleClose(event) {
         console.log(`connect closed: ${event.code} ${event.reason}`);
+        this.websocket = null;
+        eventBus.emit('websocketClosed', { code: event.code, reason: event.reason });
         if (this.manualClose) return;
         if (this.attempts < maxAttempts)
             this.scheduleReconnect();
@@ -104,7 +106,7 @@ export class WebSocketClient {
     }
 
     get status() {
-        return this.websocket?.readyState ? ['connecting', 'open', 'closing', 'closed'][this.websocket.readyState - 1] : 'closed';
+        return this.websocket ? ['connecting', 'open', 'closing', 'closed'][this.websocket.readyState] : 'closed';
     }
 
     destroy() {

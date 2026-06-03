@@ -1,17 +1,40 @@
-// src/commands/impl/RescueHandler.ts
-
-import { Command } from '../../server/types';
+import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
 import { GameInstance } from '../../server/core/GameInstance';
-import { getDate, parseFullDate } from '../../utils/TimeUtils';
+import { getDate } from '../../utils/TimeUtils';
+import { readFullDate, readTaskProgress } from '../../utils/FieldExtractor';
+
+type RescueStatus = NonNullable<Status['rescue']>;
+type RescueConfig = NonNullable<Config['rescue']>;
+
+type RescueResponse =
+    | { type: 'available'; taskId: number; limit: number }
+    | { type: 'current'; taskId: number; limit: number; progress: number; arrivalTime?: Date }
+    | { type: 'claimAvailable' }
+    | { type: 'accepted' }
+    | { type: 'flightFinished'; dailyLimit: boolean }
+    | { type: 'claimed' }
+    | { type: 'unmatched' };
+
+type RescueEffect =
+    | { type: 'patchStatus'; status: RescueStatus }
+    | { type: 'scheduleCommand'; command: Command }
+    | { type: 'registerScheduler' };
+
+const RESCUE_COMMAND = {
+    status: '救援任务',
+    accept: '接救援任务',
+    flyTo: '飞往',
+    claim: '领救援任务奖励',
+} as const;
 
 export default class RescueHandler implements CommandHandler {
     readonly category = 'rescue';
     readonly COMMAND_TYPE = new Map([
-        ['救援任务', 'rescue'],
-        ['接救援任务', 'rescue_accept'],
-        ['飞往', 'rescue_flyto'],
-        ['领救援任务奖励', 'rescue_claim'],
+        [RESCUE_COMMAND.status, 'rescue'],
+        [RESCUE_COMMAND.accept, 'rescue_accept'],
+        [RESCUE_COMMAND.flyTo, 'rescue_flyto'],
+        [RESCUE_COMMAND.claim, 'rescue_claim'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['rescue', /救援任务如下/],
@@ -19,44 +42,20 @@ export default class RescueHandler implements CommandHandler {
         ['rescue_flyto', /预计到达日期|每天最多飞/],
         ['rescue_claim', /领取成功/],
     ])
-    readonly RESCUE_AVAILABLE_PATTERN = /任务序号:(?<rescueTaskId>\d+)\n任务名称:.*?\n任务状态:未接\(0\/(?<rescueTaskLimit>\d+)\)/;
-    readonly RESCUE_CURRENT_PATTERN = /任务序号:(?<rescueTaskId>\d+)\n任务名称:.*?\n任务状态:进行中\((?<rescueTaskProgress>\d+)\/(?<rescueTaskLimit>\d+)\)/;
     readonly RESCUE_FINISHED_PATTERN = /可领取奖励/;
     readonly RESCUE_LIMIT_PATTERN = /每天最多飞/;
 
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.rescue = instance.account.status.rescue || {};
         const config = instance.account.config.rescue!;
-        if (!config.enabled)
-            return;
-        if (command.type === 'rescue') {
-            if (response.match(this.RESCUE_AVAILABLE_PATTERN)) {
-                const { rescueTaskId, rescueTaskLimit } = response.match(this.RESCUE_AVAILABLE_PATTERN)!.groups!;
-                instance.updateStatus({ rescue: { rescueTaskId: parseInt(rescueTaskId), rescueTaskLimit: parseInt(rescueTaskLimit), rescueTaskProgress: 0, arrivalTime: undefined } });
-                instance.scheduleCommand({ type: 'rescue_accept', body: `接救援任务 ${rescueTaskId}` });
-            }
-            else if (response.match(this.RESCUE_CURRENT_PATTERN)) {
-                const { rescueTaskId, rescueTaskLimit, rescueTaskProgress } = response.match(this.RESCUE_CURRENT_PATTERN)!.groups!;
-                const arrivalTime = parseFullDate(response);
-                instance.updateStatus({ rescue: { rescueTaskId: parseInt(rescueTaskId), rescueTaskLimit: parseInt(rescueTaskLimit), rescueTaskProgress: parseInt(rescueTaskProgress), arrivalTime } });
-                instance.scheduleCommand({ type: 'rescue_flyto', body: `飞往 ${parseInt(rescueTaskProgress) + 1}`, date: arrivalTime });
-            } else if (response.match(this.RESCUE_FINISHED_PATTERN)) {
-                instance.scheduleCommand({ type: 'rescue_claim', body: '领救援任务奖励' });
-            }
-        }
-        if (command.type === 'rescue_accept')
-            instance.scheduleCommand({ type: 'rescue_flyto', body: `飞往 1` });
-        if (command.type === 'rescue_flyto') {
-            if (response.match(this.RESCUE_LIMIT_PATTERN))
-                instance.updateStatus({ rescue: { finished: true } });
-            this.registerScheduler(instance);
-        }
-        if (command.type === 'rescue_claim')
-            instance.scheduleCommand({ type: 'rescue', body: '救援任务' });
+        const rescueResponse = this.parseResponse(command, response);
+        const effects = this.transition(rescueResponse, config);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        command = { ...command, type: 'rescue', body: '救援任务', retries: (command.retries || 0) + 1 };
+        command = { ...command, type: 'rescue', body: RESCUE_COMMAND.status, retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }
 
@@ -65,6 +64,73 @@ export default class RescueHandler implements CommandHandler {
         const status = instance.account.status.rescue;
         if (!config.enabled)
             return;
-        instance.scheduleCommand({ type: 'rescue', body: '救援任务', date: status?.arrivalTime ?? getDate({ ...config.time, dayOffset: status?.finished ? 1 : 0 }) });
+        instance.scheduleCommand({ type: 'rescue', body: RESCUE_COMMAND.status, date: status?.arrivalTime ?? getDate({ ...config.time, dayOffset: status?.finished ? 1 : 0 }) });
+    }
+
+    private parseResponse(command: Command, response: string): RescueResponse {
+        if (command.type === 'rescue') {
+            const task = readTaskProgress(response);
+            const progress = task?.counts[0];
+            if (task?.state === '未接' && progress)
+                return { type: 'available', taskId: task.taskId, limit: progress.limit };
+            if (task?.state === '进行中' && progress)
+                return { type: 'current', taskId: task.taskId, limit: progress.limit, progress: progress.current, arrivalTime: readFullDate(response) };
+            if (this.RESCUE_FINISHED_PATTERN.test(response))
+                return { type: 'claimAvailable' };
+            return { type: 'unmatched' };
+        }
+        if (command.type === 'rescue_accept')
+            return { type: 'accepted' };
+        if (command.type === 'rescue_flyto')
+            return { type: 'flightFinished', dailyLimit: this.RESCUE_LIMIT_PATTERN.test(response) };
+        if (command.type === 'rescue_claim')
+            return { type: 'claimed' };
+        return { type: 'unmatched' };
+    }
+
+    private transition(response: RescueResponse, config: RescueConfig): RescueEffect[] {
+        if (!config.enabled)
+            return [];
+        switch (response.type) {
+            case 'available':
+                return [
+                    { type: 'patchStatus', status: { rescueTaskId: response.taskId, rescueTaskLimit: response.limit, rescueTaskProgress: 0, arrivalTime: undefined } },
+                    { type: 'scheduleCommand', command: { type: 'rescue_accept', body: `${RESCUE_COMMAND.accept} ${response.taskId}` } },
+                ];
+            case 'current':
+                return [
+                    { type: 'patchStatus', status: { rescueTaskId: response.taskId, rescueTaskLimit: response.limit, rescueTaskProgress: response.progress, arrivalTime: response.arrivalTime } },
+                    { type: 'scheduleCommand', command: { type: 'rescue_flyto', body: `${RESCUE_COMMAND.flyTo} ${response.progress + 1}`, date: response.arrivalTime } },
+                ];
+            case 'claimAvailable':
+                return [{ type: 'scheduleCommand', command: { type: 'rescue_claim', body: RESCUE_COMMAND.claim } }];
+            case 'accepted':
+                return [{ type: 'scheduleCommand', command: { type: 'rescue_flyto', body: `${RESCUE_COMMAND.flyTo} 1` } }];
+            case 'flightFinished': {
+                const effects: RescueEffect[] = [];
+                if (response.dailyLimit)
+                    effects.push({ type: 'patchStatus', status: { finished: true } });
+                effects.push({ type: 'registerScheduler' });
+                return effects;
+            }
+            case 'claimed':
+                return [{ type: 'scheduleCommand', command: { type: 'rescue', body: RESCUE_COMMAND.status } }];
+            case 'unmatched':
+                return [];
+        }
+    }
+
+    private async applyEffect(effect: RescueEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ rescue: effect.status });
+                break;
+            case 'scheduleCommand':
+                await instance.scheduleCommand(effect.command);
+                break;
+            case 'registerScheduler':
+                this.registerScheduler(instance);
+                break;
+        }
     }
 }

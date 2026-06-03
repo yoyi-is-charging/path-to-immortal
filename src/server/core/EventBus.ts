@@ -1,34 +1,40 @@
 // src/server/core/EventBus.ts
 
 import { logger } from "../../utils/logger";
+import { DebugLog } from "../../utils/DebugLog";
 import { Command } from "../types";
+import { RuntimeEventMap } from "./RuntimeEvents";
+
+type EventListener<T> = (data: T) => void;
 
 export class EventBus {
-    private static listeners: Record<string, Array<(data: any) => void>> = {};
+    private static listeners: Partial<{ [K in keyof RuntimeEventMap]: Array<EventListener<RuntimeEventMap[K]>> }> = {};
 
     public static init() {
-        EventBus.on('commandScheduled', ({ accountId, command }: { accountId: string, command: Command }) => logger.debug(`Command scheduled for account ${accountId}: ${command.type} at ${new Date(command.date!).toLocaleString()}`));
-        EventBus.on('commandSent', ({ accountId, command }: { accountId: string, command: Command }) => logger.debug(`Command sent for account ${accountId}: ${command.type}`));
-        EventBus.on('commandProcessed', ({ accountId, command }: { accountId: string, command: Command }) => logger.debug(`Command processed for account ${accountId}: ${command.type}`));
         EventBus.on('commandFailed', ({ accountId, command, error, response }: { accountId: string, command: Command, error: string, response: string }) => logger.info(`Command failed for account ${accountId}: ${command.type} - ${error} - ${response}`));
         EventBus.on('processCommandError', ({ accountId, command, error }: { accountId: string, command: Command, error: string }) => logger.error(`Error processing command ${command.type} for account ${accountId}: ${error}`));
         EventBus.on('sessionUpdateScheduled', ({ accountId, timestamp }: { accountId: string, timestamp: number }) => logger.info(`Relogin scheduled for account ${accountId} at ${new Date(timestamp).toLocaleString()}`));
+        logger.info('Runtime event bus initialized');
     }
 
-    public static on(event: string, listener: (data: any) => void) {
-        if (!this.listeners[event])
-            this.listeners[event] = [];
-        this.listeners[event].push(listener);
+    public static on<K extends keyof RuntimeEventMap>(event: K, listener: EventListener<RuntimeEventMap[K]>) {
+        const listeners = this.listeners as Record<string, Array<EventListener<any>> | undefined>;
+        if (!listeners[event])
+            listeners[event] = [];
+        listeners[event]!.push(listener);
     }
 
-    public static off(event: string, listener: (data: any) => void) {
-        if (!this.listeners[event])
+    public static off<K extends keyof RuntimeEventMap>(event: K, listener: EventListener<RuntimeEventMap[K]>) {
+        const listeners = this.listeners as Record<string, Array<EventListener<any>> | undefined>;
+        if (!listeners[event])
             return;
-        this.listeners[event] = this.listeners[event].filter(l => l !== listener);
+        listeners[event] = listeners[event]!.filter(l => l !== listener);
     }
 
 
-    public static emit(event: string, data: any) {
-        this.listeners[event]?.forEach(listener => listener(data));
+    public static emit<K extends keyof RuntimeEventMap>(event: K, data: RuntimeEventMap[K]) {
+        DebugLog.runtimeEvent(String(event), data);
+        const listeners = this.listeners as Record<string, Array<EventListener<any>> | undefined>;
+        listeners[event]?.forEach(listener => listener(data));
     }
 }

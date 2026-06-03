@@ -4,74 +4,488 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>游戏账户管理器</title>
-
-    <!-- <script type="module" src="components/import-map.js"></script>
-    <import-map></import-map> -->
+    <title>修仙之路账户管理器</title>
     <script type="importmap">
         { "imports": { "tslib": "/node_modules/tslib/tslib.es6.js", "lit/": "/node_modules/lit/", "lit": "/node_modules/lit/index.js", "@lit/reactive-element": "/node_modules/@lit/reactive-element/reactive-element.js", "@lit/reactive-element/": "/node_modules/@lit/reactive-element/", "lit-html": "/node_modules/lit-html/lit-html.js", "lit-html/": "/node_modules/lit-html/", "lit-element/": "/node_modules/lit-element/" } }
     </script>
-
     <script type="module" src="components/account-list.js"></script>
     <script type="module" src="/node_modules/@material/web/all.js"></script>
     <style>
-        body {
-            visibility: hidden;
+        :root {
+            color-scheme: light;
+            --bg: #f6f7f9;
+            --surface: #ffffff;
+            --surface-strong: #eef3f7;
+            --line: #d7dde5;
+            --text: #16202a;
+            --muted: #647181;
+            --ok: #1b7f4c;
+            --warn: #986b13;
+            --bad: #b3261e;
+            --accent: #245a9a;
+            --radius: 8px;
+            --shadow: 0 1px 3px rgba(20, 32, 42, 0.08);
         }
 
-        md-fab {
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            visibility: hidden;
+            margin: 0;
+            min-height: 100vh;
+            color: var(--text);
+            background: var(--bg);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        .app-shell {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface);
+        }
+
+        .brand {
+            min-width: 220px;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 650;
+            letter-spacing: 0;
+        }
+
+        .brand small {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .search-field {
+            width: 260px;
+            max-width: 100%;
+        }
+
+        .content {
+            width: min(1360px, 100%);
+            margin: 0 auto;
+            padding: 20px 24px 32px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .metric {
+            min-height: 82px;
+            padding: 14px 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .metric-value {
+            margin-top: 8px;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .account-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+            gap: 14px;
+        }
+
+        .account-card {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-height: 300px;
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+        }
+
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .account-title {
+            min-width: 0;
+        }
+
+        .account-id {
+            margin: 0;
+            overflow-wrap: anywhere;
+            font-size: 18px;
+            font-weight: 650;
+        }
+
+        .account-subtitle {
+            margin-top: 3px;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .badge-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            font-size: 12px;
+            white-space: nowrap;
+            background: var(--surface-strong);
+        }
+
+        .badge.online {
+            color: var(--ok);
+            border-color: #b8dbc7;
+            background: #eef8f2;
+        }
+
+        .badge.offline {
+            color: var(--muted);
+        }
+
+        .badge.warn {
+            color: var(--warn);
+            border-color: #ead6a7;
+            background: #fff8e6;
+        }
+
+        .badge.bad {
+            color: var(--bad);
+            border-color: #edc3bf;
+            background: #fff1f0;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .detail {
+            min-height: 58px;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: #fbfcfd;
+        }
+
+        .detail span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .detail strong {
+            display: block;
+            margin-top: 4px;
+            overflow-wrap: anywhere;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .activity-panel {
+            display: grid;
+            gap: 8px;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: #fbfcfd;
+        }
+
+        .activity-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .activity-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .activity-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 100%;
+            min-height: 30px;
+            padding: 5px 8px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
+            font-size: 12px;
+        }
+
+        .activity-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 180px;
+            font-weight: 600;
+        }
+
+        .activity-state {
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .activity-item.running {
+            border-color: #bed4ee;
+            background: #f1f7ff;
+        }
+
+        .activity-item.running .activity-state {
+            color: var(--accent);
+        }
+
+        .activity-item.warn {
+            border-color: #ead6a7;
+            background: #fff8e6;
+        }
+
+        .activity-item.warn .activity-state {
+            color: var(--warn);
+        }
+
+        .activity-item.fail {
+            border-color: #edc3bf;
+            background: #fff1f0;
+        }
+
+        .activity-item.fail .activity-state {
+            color: var(--bad);
+        }
+
+        .command-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .command-input {
+            width: 100%;
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .danger-row {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: space-between;
+        }
+
+        .empty-state {
+            display: none;
+            padding: 34px 20px;
+            border: 1px dashed var(--line);
+            border-radius: var(--radius);
+            color: var(--muted);
+            text-align: center;
+            background: var(--surface);
+        }
+
+        .toast {
             position: fixed;
-            bottom: 16px;
-            right: 16px;
-            z-index: 1000;
+            right: 18px;
+            bottom: 18px;
+            z-index: 1200;
+            max-width: min(420px, calc(100vw - 36px));
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            border: 1px solid var(--line);
+            background: var(--surface);
+            box-shadow: 0 8px 26px rgba(20, 32, 42, 0.18);
+            color: var(--text);
+            opacity: 0;
+            transform: translateY(8px);
+            pointer-events: none;
+            transition: opacity 160ms ease, transform 160ms ease;
+        }
+
+        .toast.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .toast.error {
+            border-color: #edc3bf;
+            color: var(--bad);
+        }
+
+        md-dialog form {
+            display: grid;
+            gap: 12px;
+            min-width: min(420px, calc(100vw - 48px));
+        }
+
+        #qr-code {
+            display: block;
+            width: 240px;
+            height: 240px;
+            object-fit: contain;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 760px) {
+            .topbar {
+                align-items: stretch;
+                flex-direction: column;
+                padding: 16px;
+            }
+
+            .toolbar {
+                justify-content: stretch;
+            }
+
+            .search-field {
+                width: 100%;
+            }
+
+            .content {
+                padding: 16px;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .account-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .detail-grid,
+            .command-row {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
     <script>
-        window.addEventListener('DOMContentLoaded', () => document.body.style.visibility = 'visible');    
+        window.addEventListener('DOMContentLoaded', () => document.body.style.visibility = 'visible');
     </script>
 </head>
 
 <body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <h1>修仙之路账户管理器</h1>
+                <small id="connection-status">连接中</small>
+            </div>
+            <div class="toolbar">
+                <md-outlined-text-field id="account-search" class="search-field" label="搜索账号"></md-outlined-text-field>
+                <md-filled-button id="refresh-accounts">刷新</md-filled-button>
+                <md-filled-button id="add-account">添加账户</md-filled-button>
+            </div>
+        </header>
+
+        <main class="content">
+            <section class="summary-grid" aria-label="账户概览">
+                <div class="metric">
+                    <div class="metric-label">账户</div>
+                    <div class="metric-value" id="metric-total">0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">在线</div>
+                    <div class="metric-value" id="metric-online">0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">有效会话</div>
+                    <div class="metric-value" id="metric-session">0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">待执行命令</div>
+                    <div class="metric-value" id="metric-command">0</div>
+                </div>
+            </section>
+
+            <div id="empty-state" class="empty-state">暂无账户</div>
+            <section id="account-list" class="account-grid" aria-label="账户列表"></section>
+        </main>
+    </div>
 
     <md-dialog id="add-account-dialog">
         <div slot="headline">添加账户</div>
         <form slot="content" id="add-account-form" method="dialog">
-            <md-filled-text-field id="username" required class="form-field">
-                账号
-            </md-filled-text-field>
-            <md-filled-text-field type="password" id="password" class="form-field">
-                密码
-            </md-filled-text-field>
+            <md-filled-text-field id="username" label="账号" required></md-filled-text-field>
+            <md-filled-text-field type="password" id="password" label="密码"></md-filled-text-field>
         </form>
         <div slot="actions">
-            <md-text-button class="submit-button" type="submit" form="add-account-form">提交</md-text-button>
+            <md-text-button id="cancel-add-account" type="button">取消</md-text-button>
+            <md-filled-button class="submit-button" type="submit" form="add-account-form">提交</md-filled-button>
         </div>
     </md-dialog>
-
-    <md-list class="account-list">
-        <md-list-item>
-            <div slot="headline">
-                <h2 class="headline">
-                    账户列表
-                    <small class="stats-text" id="stats-text"></small>
-                </h2>
-            </div>
-        </md-list-item>
-        <md-divider></md-divider>
-
-        <div id="account-list"></div>
-    </md-list>
-
-    <md-fab class="add-account-button">
-        <svg slot="icon" viewBox="0 0 36 36">
-            <path d="M16 16v14h4V20z M30 16H20l-4 4h14z M6 16v4h10l4-4z M20 16V6h-4v14z"></path>
-        </svg>
-    </md-fab>
 
     <md-dialog id="qr-code-dialog">
         <div slot="headline">扫码登录</div>
         <img id="qr-code" src="" alt="二维码" slot="content">
+        <div slot="actions">
+            <md-text-button id="close-qr-dialog">关闭</md-text-button>
+        </div>
     </md-dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 
 </html>

@@ -1,65 +1,126 @@
-// src/commands/impl/BagHandler.cs
-
 import { GameInstance } from '../../server/core/GameInstance';
-import { Command } from '../../server/types';
+import { Command, Config, MessageBody, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { readLineCounts } from '../../utils/FieldExtractor';
+
+type BagStatus = NonNullable<Status['bag']>;
+type BagConfig = NonNullable<Config['bag']>;
+
+type BagResponse =
+    | { type: 'items'; items: string[]; itemCounts: number[] }
+    | { type: 'sendConfirm' }
+    | { type: 'sendCompleted' }
+    | { type: 'unmatched' };
+
+type BagEffect =
+    | { type: 'patchStatus'; status: BagStatus }
+    | { type: 'scheduleCommand'; command: Command };
+
+const BAG_COMMAND = {
+    check: '我的背包',
+    send: '送道具',
+    confirmSend: '确定送道具',
+} as const;
 
 export default class BagHandler implements CommandHandler {
     readonly category = 'bag';
     readonly COMMAND_TYPE = new Map([
-        ['我的背包', 'bag_check'],
-        ['送道具', 'bag_sendItem'],
-        ['确定送道具', 'bag_sendItem'],
+        [BAG_COMMAND.check, 'bag_check'],
+        [BAG_COMMAND.send, 'bag_sendItem'],
+        [BAG_COMMAND.confirmSend, 'bag_sendItem'],
     ]);
     readonly RESPONSE_PATTERN = new Map([
         ['bag_check', /我的背包如下/],
         ['bag_sendItem', /确定要送道具吗|成功送/],
     ]);
 
-    readonly SEND_CONFIRM_PATTERN = /确定要送道具吗/;
-
-    readonly ITEM_COUNT_PATTERN_GLOBAL = /(?<=\n)(?<item>[^卡]\S+):(?<count>\d+)/g;
-
     async handleResponse(command: Command, response: string, instance: GameInstance) {
         instance.account.status.bag = instance.account.status.bag || {};
         const status = instance.account.status.bag;
         const config = instance.account.config.bag;
-        if (command.type === 'bag_check') {
-            const items = [...response.matchAll(this.ITEM_COUNT_PATTERN_GLOBAL)];
-            status.items = items.map(match => match.groups!.item);
-            status.itemCounts = items.map(match => parseInt(match.groups!.count));
-            this.validateItems(instance);
-        }
-        if (!config?.enabled)
-            return;
-        if (command.type === 'bag_sendItem') {
-            if (this.SEND_CONFIRM_PATTERN.test(response)) {
-                instance.scheduleCommand({ type: 'bag_sendItem', body: '确定送道具' });
-                return;
-            } else {
-                status.items!.shift();
-                status.itemCounts!.shift();
-            }
-        }
-        if (status.items!.length > 0)
-            instance.scheduleCommand({ type: 'bag_sendItem', body: [{ str: `送道具 ${status.items![0]} ${status.itemCounts![0]}`, bytes_pb_reserve: null }, { str: config.target?.str!, bytes_pb_reserve: config.target?.bytes_pb_reserve! }] });
+        const bagResponse = this.parseResponse(command, response);
+        const effects = this.transition(status, bagResponse, config);
+        for (const effect of effects)
+            await this.applyEffect(effect, instance);
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
-        command = { ...command, type: 'bag_check', body: '我的背包', retries: (command.retries || 0) + 1 };
+        command = { ...command, type: 'bag_check', body: BAG_COMMAND.check, retries: (command.retries || 0) + 1 };
         return command.retries! < 3 ? command : undefined;
     }
 
-    validateItems(instance: GameInstance) {
-        const status = instance.account.status.bag!;
-        const config = instance.account.config.bag!;
-        status.items = status.items!.map(item => item === '双休丹' ? '双修丹' : item);
-        const items = Object.fromEntries(status.items!.map((item, index) => [item, status.itemCounts![index]]));
+    private parseResponse(command: Command, response: string): BagResponse {
+        if (command.type === 'bag_check') {
+            const items = readLineCounts(response);
+            return {
+                type: 'items',
+                items: items.map(item => item.name),
+                itemCounts: items.map(item => item.count),
+            };
+        }
+        if (command.type === 'bag_sendItem')
+            return response.includes('确定要送道具吗') ? { type: 'sendConfirm' } : { type: 'sendCompleted' };
+        return { type: 'unmatched' };
+    }
+
+    private transition(status: BagStatus, response: BagResponse, config?: BagConfig): BagEffect[] {
+        switch (response.type) {
+            case 'items': {
+                const nextStatus = this.validateItems({ items: response.items, itemCounts: response.itemCounts }, config);
+                return [
+                    { type: 'patchStatus', status: nextStatus },
+                    ...this.scheduleNextSend(nextStatus, config),
+                ];
+            }
+            case 'sendConfirm':
+                return config?.enabled
+                    ? [{ type: 'scheduleCommand', command: { type: 'bag_sendItem', body: BAG_COMMAND.confirmSend } }]
+                    : [];
+            case 'sendCompleted': {
+                if (!config?.enabled)
+                    return [];
+                const nextStatus = {
+                    items: [...(status.items ?? [])].slice(1),
+                    itemCounts: [...(status.itemCounts ?? [])].slice(1),
+                };
+                return [
+                    { type: 'patchStatus', status: nextStatus },
+                    ...this.scheduleNextSend(nextStatus, config),
+                ];
+            }
+            case 'unmatched':
+                return [];
+        }
+    }
+
+    private validateItems(status: BagStatus, config?: BagConfig): BagStatus {
+        const normalizedItems = (status.items ?? []).map(item => item === '双休丹' ? '双修丹' : item);
+        const items = Object.fromEntries(normalizedItems.map((item, index) => [item, status.itemCounts![index]]));
         for (const key of ['抽卡券', '妖兽令', '心法令', '宠物蛋'])
             delete items[key];
-        for (const reserved of config.reservedItems || [])
+        for (const reserved of config?.reservedItems || [])
             delete items[reserved];
-        status.items = Object.keys(items);
-        status.itemCounts = Object.values(items);
+        return { items: Object.keys(items), itemCounts: Object.values(items) };
+    }
+
+    private scheduleNextSend(status: BagStatus, config?: BagConfig): BagEffect[] {
+        if (!config?.enabled || !status.items?.length)
+            return [];
+        const body: MessageBody = [
+            { str: `${BAG_COMMAND.send} ${status.items[0]} ${status.itemCounts![0]}`, bytes_pb_reserve: null },
+            { str: config.target?.str!, bytes_pb_reserve: config.target?.bytes_pb_reserve! },
+        ];
+        return [{ type: 'scheduleCommand', command: { type: 'bag_sendItem', body } }];
+    }
+
+    private async applyEffect(effect: BagEffect, instance: GameInstance) {
+        switch (effect.type) {
+            case 'patchStatus':
+                await instance.updateStatus({ bag: effect.status });
+                break;
+            case 'scheduleCommand':
+                await instance.scheduleCommand(effect.command);
+                break;
+        }
     }
 }
