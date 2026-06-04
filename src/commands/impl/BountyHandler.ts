@@ -1,5 +1,6 @@
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate, min } from '../../utils/TimeUtils';
 import { countOccurrences, readAllMinuteDurations, readClockTime, readFirstCount, readIndexedOptionBeforeLine } from '../../utils/FieldExtractor';
@@ -48,8 +49,7 @@ export default class BountyHandler implements CommandHandler {
         const config = instance.account.config.bounty!;
         const bountyResponse = this.parseResponse(command, response, config);
         const effects = this.transition(instance.account.status.bounty, bountyResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'bounty', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -135,17 +135,4 @@ export default class BountyHandler implements CommandHandler {
         }
     }
 
-    private async applyEffect(effect: BountyEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ bounty: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

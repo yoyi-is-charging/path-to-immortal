@@ -2,8 +2,8 @@
 
 import { Command, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
-import { logger } from '../../utils/logger';
 import { getDate } from '../../utils/TimeUtils';
 import { readAnswerIndex, readBracketValue, readFirstCount, readNumberAfter } from '../../utils/FieldExtractor';
 
@@ -294,8 +294,7 @@ export default class MiscHandler implements CommandHandler {
         instance.account.status.misc = instance.account.status.misc || {};
         const miscResponse = this.parseResponse(command, response);
         const effects = this.transition(miscResponse, instance);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'misc', registerTypeScheduler: (target, commandType) => this.registerTypeScheduler(target, commandType) });
     }
 
     private parseResponse(command: Command, response: string): MiscResponse {
@@ -480,23 +479,6 @@ export default class MiscHandler implements CommandHandler {
         if (!answer)
             return { index: 1, errors: [`Answer for task type ${taskType} not found, using default index 1`] };
         return { index: readAnswerIndex(response, answer) ?? 1, errors: [] };
-    }
-
-    private async applyEffect(effect: MiscEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ misc: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command, effect.delay);
-                break;
-            case 'registerTypeScheduler':
-                this.registerTypeScheduler(instance, effect.commandType);
-                break;
-            case 'logError':
-                logger.error(effect.message);
-                break;
-        }
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {

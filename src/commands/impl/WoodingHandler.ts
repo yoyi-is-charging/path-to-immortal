@@ -1,5 +1,6 @@
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readChineseDuration, readFriendPriceOffers, readMinuteDuration, readNumberAfter } from '../../utils/FieldExtractor';
@@ -77,8 +78,7 @@ export default class WoodingHandler implements CommandHandler {
         const config = instance.account.config.wooding!;
         const woodingResponse = this.parseResponse(command, response);
         const effects = this.transition(instance.account.status.wooding, woodingResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'wooding', registerTypeScheduler: (target, commandType) => this.registerTypeScheduler(target, commandType) });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -262,17 +262,4 @@ export default class WoodingHandler implements CommandHandler {
         return effects;
     }
 
-    private async applyEffect(effect: WoodingEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ wooding: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-            case 'registerTypeScheduler':
-                this.registerTypeScheduler(instance, effect.commandType);
-                break;
-        }
-    }
 }

@@ -3,7 +3,7 @@
 import { CommandFactory } from '../../commands/CommandFactory';
 import { logger } from '../../utils/logger';
 import { DebugLog } from '../../utils/DebugLog';
-import { Command } from '../types';
+import { Command, MessageBody } from '../types';
 import { EventBus } from './EventBus';
 import { GameInstance } from './GameInstance';
 import { MessageRouter } from './MessageRouter';
@@ -13,6 +13,10 @@ export class CommandScheduler {
 
     static readonly COLLISION_THRESHOLD = 1000;
     static readonly DESTROY_THRESHOLD = 60 * 1000; // 60 seconds
+    static readonly RESPONSE_TIMEOUT = 15 * 1000;
+    static readonly SEND_RETRY_LIMIT = 3;
+    static readonly SEND_RETRY_BASE_DELAY = 1000;
+    static readonly SEND_RETRY_MAX_DELAY = 10 * 1000;
 
     private readonly messageRouter: MessageRouter;
 
@@ -45,6 +49,7 @@ export class CommandScheduler {
             checkCommands();
         });
         this.scheduledCommands.forEach(cmd => clearTimeout(cmd.timeoutId!));
+        this.pendingCommands.forEach(cmd => cmd.reject?.(new Error(`Command scheduler destroyed for accountId: ${this.instance.account.id}`)));
         this.pendingCommands.length = 0;
         this.scheduledCommands.length = 0;
         DebugLog.log('scheduler', 'destroy.complete', { accountId: this.instance.account.id });
@@ -163,55 +168,111 @@ export class CommandScheduler {
         }
         if (typeof command.body === 'string')
             command.body = [{ str: command.body, bytes_pb_reserve: null }];
-        this.commandCount++;
-        try {
-            DebugLog.log('scheduler', 'send.start', {
+        await this.sendCommandWithRetry(command);
+        this.removeScheduledCommand(command);
+        this.pendingCommands.push(command);
+        DebugLog.log('scheduler', 'pending.added', {
+            accountId: this.instance.account.id,
+            command: DebugLog.command(command),
+            scheduledCount: this.scheduledCommands.length,
+            pendingCount: this.pendingCommands.length,
+        });
+        EventBus.emit('commandSent', { accountId: this.instance.account.id, command });
+        this.instance.scheduleFetch();
+        return this.waitForCommandResponse(command);
+    }
+
+    private async sendCommandWithRetry(command: Command) {
+        for (let attempt = 1; attempt <= CommandScheduler.SEND_RETRY_LIMIT; attempt++) {
+            this.commandCount++;
+            try {
+                DebugLog.log('scheduler', 'send.start', {
+                    accountId: this.instance.account.id,
+                    command: DebugLog.command(command),
+                    attempt,
+                    maxAttempts: CommandScheduler.SEND_RETRY_LIMIT,
+                    commandCount: this.commandCount,
+                });
+                await this.instance.sendCommand(command.body as MessageBody);
+                DebugLog.log('scheduler', 'send.complete', {
+                    accountId: this.instance.account.id,
+                    command: DebugLog.command(command),
+                    attempt,
+                });
+                return;
+            } catch (error) {
+                const retryable = attempt < CommandScheduler.SEND_RETRY_LIMIT;
+                const delay = this.retryDelay(attempt);
+                DebugLog.log('scheduler', retryable ? 'send.retryScheduled' : 'send.retryExhausted', {
+                    accountId: this.instance.account.id,
+                    command: DebugLog.command(command),
+                    attempt,
+                    maxAttempts: CommandScheduler.SEND_RETRY_LIMIT,
+                    retryInMs: retryable ? delay : undefined,
+                    error,
+                });
+                logger.warn('command.sendFailed', {
+                    accountId: this.instance.account.id,
+                    commandType: command.type,
+                    attempt,
+                    maxAttempts: CommandScheduler.SEND_RETRY_LIMIT,
+                    error: (error as Error).message,
+                });
+                if (!retryable)
+                    throw error;
+                await this.delay(delay);
+            }
+        }
+    }
+
+    private waitForCommandResponse(command: Command): Promise<string> {
+        let timeoutId: NodeJS.Timeout;
+        const timeoutPromise = new Promise<string>((resolve, reject) => timeoutId = setTimeout(() => {
+            DebugLog.log('scheduler', 'response.timeout', {
                 accountId: this.instance.account.id,
                 command: DebugLog.command(command),
-                commandCount: this.commandCount,
+                pendingCount: this.pendingCommands.length,
+                timeoutMs: CommandScheduler.RESPONSE_TIMEOUT,
             });
-            await this.instance.sendCommand(command.body);
-            this.scheduledCommands.splice(this.scheduledCommands.indexOf(command), 1);
-            this.pendingCommands.push(command);
-            DebugLog.log('scheduler', 'pending.added', {
+            reject(new Error(`Command ${command.type} timed out after ${CommandScheduler.RESPONSE_TIMEOUT}ms`));
+        }, CommandScheduler.RESPONSE_TIMEOUT));
+        const responsePromise = new Promise<string>((resolve, reject) => {
+            command.resolve = resolve;
+            command.reject = reject;
+        });
+        return Promise.race([timeoutPromise, responsePromise]).finally(() => {
+            clearTimeout(timeoutId);
+            command.resolve = undefined;
+            command.reject = undefined;
+            this.removePendingCommand(command);
+            DebugLog.log('scheduler', 'pending.removed', {
                 accountId: this.instance.account.id,
                 command: DebugLog.command(command),
-                scheduledCount: this.scheduledCommands.length,
                 pendingCount: this.pendingCommands.length,
             });
-            EventBus.emit('commandSent', { accountId: this.instance.account.id, command });
+            EventBus.emit('commandProcessed', { accountId: this.instance.account.id, command });
             this.instance.scheduleFetch();
-            let timeoutId: NodeJS.Timeout;
-            const timeoutPromise = new Promise<string>((resolve, reject) => timeoutId = setTimeout(() => {
-                DebugLog.log('scheduler', 'send.timeout', {
-                    accountId: this.instance.account.id,
-                    command: DebugLog.command(command),
-                    pendingCount: this.pendingCommands.length,
-                });
-                reject(new Error(`Command ${command.type} timed out`));
-            }, 15000));
-            const responsePromise = new Promise<string>((resolve, reject) => { command.resolve = resolve, command.reject = reject; });
-            return Promise.race([timeoutPromise, responsePromise]).finally(() => {
-                clearTimeout(timeoutId);
-                this.pendingCommands.splice(this.pendingCommands.indexOf(command), 1);
-                DebugLog.log('scheduler', 'pending.removed', {
-                    accountId: this.instance.account.id,
-                    command: DebugLog.command(command),
-                    pendingCount: this.pendingCommands.length,
-                });
-                EventBus.emit('commandProcessed', { accountId: this.instance.account.id, command });
-                this.instance.scheduleFetch();
-            });
-        }
-        catch (error) {
-            DebugLog.log('scheduler', 'send.errorRetry', {
-                accountId: this.instance.account.id,
-                command: DebugLog.command(command),
-                error,
-            });
-            logger.error(`Failed to send command ${command.type} for accountId: ${this.instance.account.id}`, (error as Error).message);
-            return this.sendCommand(command);
-        }
+        });
+    }
+
+    private removeScheduledCommand(command: Command) {
+        const index = this.scheduledCommands.indexOf(command);
+        if (index >= 0)
+            this.scheduledCommands.splice(index, 1);
+    }
+
+    private removePendingCommand(command: Command) {
+        const index = this.pendingCommands.indexOf(command);
+        if (index >= 0)
+            this.pendingCommands.splice(index, 1);
+    }
+
+    private retryDelay(attempt: number) {
+        return Math.min(CommandScheduler.SEND_RETRY_BASE_DELAY * Math.pow(2, attempt - 1), CommandScheduler.SEND_RETRY_MAX_DELAY);
+    }
+
+    private delay(ms: number) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     public async processMessage(message: IncomingMessage) {

@@ -1,5 +1,6 @@
 import { Command, MessageBody, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readChineseDuration, readNumberAfter, readNumberedLines } from '../../utils/FieldExtractor';
@@ -42,8 +43,7 @@ export default class Fishing implements CommandHandler {
         instance.account.status.fishing = instance.account.status.fishing || {};
         const fishingResponse = this.parseResponse(response);
         const effects = this.transition(instance.account.status.fishing, fishingResponse);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'fishing', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -121,20 +121,6 @@ export default class Fishing implements CommandHandler {
             case 'blocked':
             case 'unmatched':
                 return [];
-        }
-    }
-
-    private async applyEffect(effect: FishingEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ fishing: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
         }
     }
 

@@ -5,6 +5,7 @@ import { eventBus } from "./event-bus.js";
 const baseDelay = 2000;
 const maxAttempts = 5;
 const autoReconnect = true;
+const requestTimeoutMs = 20000;
 
 export class WebSocketClient {
     constructor() {
@@ -27,8 +28,18 @@ export class WebSocketClient {
         const requestData = { ...data, requestId };
 
         return new Promise((resolve, reject) => {
-            this.pendingRequests.set(requestId, { resolve, reject });
-            this.websocket.send(JSON.stringify(requestData));
+            const timeoutId = setTimeout(() => {
+                this.pendingRequests.delete(requestId);
+                reject(new Error(`Request ${data.action || requestId} timed out after ${requestTimeoutMs}ms`));
+            }, requestTimeoutMs);
+            this.pendingRequests.set(requestId, { resolve, reject, timeoutId });
+            try {
+                this.websocket.send(JSON.stringify(requestData));
+            } catch (error) {
+                clearTimeout(timeoutId);
+                this.pendingRequests.delete(requestId);
+                reject(error);
+            }
         });
     }
 
@@ -42,8 +53,12 @@ export class WebSocketClient {
 
     handleResponse(message) {
         const { requestId, success, payload } = message;
-        const { resolve, reject } = this.pendingRequests.get(requestId);
+        const pending = this.pendingRequests.get(requestId);
+        if (!pending)
+            return;
+        const { resolve, reject, timeoutId } = pending;
         this.pendingRequests.delete(requestId);
+        clearTimeout(timeoutId);
         if (success)
             resolve(payload);
         else
@@ -78,6 +93,7 @@ export class WebSocketClient {
     handleClose(event) {
         console.log(`connect closed: ${event.code} ${event.reason}`);
         this.websocket = null;
+        this.rejectPendingRequests(new Error(`WebSocket closed: ${event.code} ${event.reason || ''}`.trim()));
         eventBus.emit('websocketClosed', { code: event.code, reason: event.reason });
         if (this.manualClose) return;
         if (this.attempts < maxAttempts)
@@ -103,6 +119,7 @@ export class WebSocketClient {
             this.websocket.close(code, reason);
             this.websocket = null;
         }
+        this.rejectPendingRequests(new Error(`WebSocket closed manually: ${code} ${reason}`.trim()));
     }
 
     get status() {
@@ -112,6 +129,14 @@ export class WebSocketClient {
     destroy() {
         this.close();
         this.onMessage = null;
+    }
+
+    rejectPendingRequests(error) {
+        for (const { reject, timeoutId } of this.pendingRequests.values()) {
+            clearTimeout(timeoutId);
+            reject(error);
+        }
+        this.pendingRequests.clear();
     }
 }
 

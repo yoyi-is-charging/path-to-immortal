@@ -1,5 +1,6 @@
 import { Command, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { readNumberAfter } from '../../utils/FieldExtractor';
 
@@ -18,8 +19,7 @@ export default class PersonalInfoHandler implements CommandHandler {
         instance.account.status.personalInfo = instance.account.status.personalInfo || {};
         const personalInfoResponse = this.parseResponse(response);
         const effects = this.transition(personalInfoResponse);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'personalInfo' });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -38,7 +38,4 @@ export default class PersonalInfoHandler implements CommandHandler {
         return [];
     }
 
-    private async applyEffect(effect: PersonalInfoEffect, instance: GameInstance) {
-        await instance.updateStatus({ personalInfo: effect.status });
-    }
 }

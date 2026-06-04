@@ -1,5 +1,7 @@
 import { accountManager } from "./account-manager.js";
 import { eventBus } from "./event-bus.js";
+import { FieldRenderer } from "./field-renderer.js";
+import { wsClient } from "./websocket-client.js";
 
 class AccountsDashboard {
     constructor() {
@@ -10,14 +12,23 @@ class AccountsDashboard {
         this.toast = document.getElementById('toast');
         this.commandsByAccount = new Map();
         this.busyActions = new Set();
+        this.schemas = new Map();
         this.searchText = '';
         this.toastTimer = null;
+        this.detailState = null;
+        this.detailDialog = document.getElementById('account-detail-dialog');
+        this.detailTitle = document.getElementById('detail-dialog-title');
+        this.detailContent = document.getElementById('detail-dialog-content');
 
         document.getElementById('add-account').addEventListener('click', () => document.getElementById('add-account-dialog').show());
         document.getElementById('refresh-accounts').addEventListener('click', () => this.loadAccounts());
         document.getElementById('add-account-form').addEventListener('submit', event => this.handleAddAccount(event));
         document.getElementById('cancel-add-account').addEventListener('click', () => document.getElementById('add-account-dialog').close());
         document.getElementById('close-qr-dialog').addEventListener('click', () => document.getElementById('qr-code-dialog').close());
+        this.detailDialog.addEventListener('close', () => this.detailState = null);
+        this.detailDialog.addEventListener('closed', () => this.detailState = null);
+        this.detailContent.addEventListener('change', event => this.handleDetailFieldUpdate(event).catch(error => this.showToast(error.message, true)));
+        this.detailDialog.addEventListener('click', event => this.handleDetailSwitch(event).catch(error => this.showToast(error.message, true)));
         this.searchField.addEventListener('input', () => {
             this.searchText = this.searchField.value.trim();
             this.render(accountManager.accounts);
@@ -59,10 +70,13 @@ class AccountsDashboard {
     updateAccount(account) {
         accountManager.upsertAccount(account);
         this.render(accountManager.accounts);
+        this.refreshDetailModal(account);
     }
 
     removeAccount(account) {
         this.commandsByAccount.delete(account.id);
+        if (this.detailState?.accountId === account.id)
+            this.detailDialog.close();
         this.render(accountManager.accounts.filter(item => item.id !== account.id));
     }
 
@@ -115,7 +129,7 @@ class AccountsDashboard {
                     </div>
                 </div>
 
-                ${this.renderActivityPanel(activityItems)}
+                ${this.renderActivityPanel(account.id, activityItems)}
 
                 <div class="command-row">
                     <md-outlined-text-field class="command-input" label="发送命令" data-command-input="${this.escapeAttr(account.id)}" ${commandDisabled}></md-outlined-text-field>
@@ -160,10 +174,17 @@ class AccountsDashboard {
                         await this.withBusy(action, accountId, () => accountManager.deleteAccount(accountId));
                     break;
                 case 'status':
-                    window.location.href = `/status/${encodeURIComponent(accountId)}`;
+                    await this.openDetailModal(accountId, 'status');
                     break;
                 case 'config':
-                    window.location.href = `/config/${encodeURIComponent(accountId)}`;
+                    await this.openDetailModal(accountId, 'config');
+                    break;
+                case 'activityDetail':
+                    await this.openDetailModal(
+                        accountId,
+                        target.getAttribute('data-detail-type') || 'status',
+                        target.getAttribute('data-detail-path') || '',
+                    );
                     break;
                 case 'send':
                     await this.sendCommand(accountId);
@@ -193,6 +214,121 @@ class AccountsDashboard {
             input.value = '';
             this.showToast(`已发送命令：${command}`);
         });
+    }
+
+    async openDetailModal(accountId, type, focusPath = '') {
+        const account = await accountManager.loadAccount(accountId);
+        const schema = await this.ensureSchema(type);
+        this.detailState = { accountId, type, schema, focusPath };
+        this.renderDetailModal(account);
+        await this.detailDialog.show();
+        this.focusDetailPath(focusPath);
+    }
+
+    async ensureSchema(type) {
+        if (!this.schemas.has(type))
+            this.schemas.set(type, await wsClient.request({ action: 'getSchema', params: { type } }));
+        return this.schemas.get(type);
+    }
+
+    renderDetailModal(account, options = {}) {
+        if (!this.detailState || !account || account.id !== this.detailState.accountId)
+            return;
+        const type = this.detailState.type;
+        const label = type === 'status' ? '状态' : '设置';
+        this.detailTitle.textContent = `${account.id} · ${label}`;
+        this.applyDetailLayout();
+        this.detailDialog.querySelectorAll('[data-detail-switch]').forEach(button => {
+            button.classList.toggle('selected', button.dataset.detailSwitch === type);
+        });
+        this.detailContent.innerHTML = FieldRenderer.render(this.detailState.schema, account[type] || {});
+        this.applyDetailExpansion(options.openPaths || [], this.detailState.focusPath || '');
+    }
+
+    applyDetailLayout() {
+        this.detailDialog.classList.remove('columns-1', 'columns-2', 'columns-3');
+        this.detailDialog.classList.add('columns-1');
+    }
+
+    getOpenDetailPaths() {
+        return [...this.detailContent.querySelectorAll('details.schema-section[open][data-schema-path]')]
+            .map(section => section.getAttribute('data-schema-path'))
+            .filter(Boolean);
+    }
+
+    applyDetailExpansion(openPaths = [], focusPath = '') {
+        this.detailContent.querySelectorAll('.schema-section.focus-target')
+            .forEach(section => section.classList.remove('focus-target'));
+        const paths = new Set(openPaths);
+        if (focusPath) {
+            const parts = focusPath.split('.').filter(Boolean);
+            for (let index = 1; index <= parts.length; index++)
+                paths.add(parts.slice(0, index).join('.'));
+        }
+        paths.forEach(path => {
+            const section = this.detailContent.querySelector(`#${CSS.escape(FieldRenderer.getId(path))}`);
+            if (section instanceof HTMLDetailsElement)
+                section.open = true;
+        });
+        if (focusPath) {
+            const focusedSection = this.detailContent.querySelector(`#${CSS.escape(FieldRenderer.getId(focusPath))}`);
+            focusedSection?.classList.add('focus-target');
+        }
+    }
+
+    focusDetailPath(path) {
+        if (!path)
+            return;
+        requestAnimationFrame(() => {
+            const section = this.detailContent.querySelector(`#${CSS.escape(FieldRenderer.getId(path))}`);
+            if (!section)
+                return;
+            section.classList.add('focus-target');
+            section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        });
+    }
+
+    refreshDetailModal(account) {
+        if (!this.detailState || account.id !== this.detailState.accountId || !this.detailDialog.open)
+            return;
+        this.renderDetailModal(account, { openPaths: this.getOpenDetailPaths() });
+    }
+
+    async handleDetailSwitch(event) {
+        if (event.target === this.detailDialog) {
+            this.detailDialog.close();
+            return;
+        }
+        const target = event.target.closest('[data-detail-switch]');
+        if (!target || !this.detailState)
+            return;
+        const type = target.dataset.detailSwitch;
+        if (type === this.detailState.type)
+            return;
+        const account = await accountManager.loadAccount(this.detailState.accountId);
+        const schema = await this.ensureSchema(type);
+        const focusPath = this.detailState.focusPath || '';
+        this.detailState = { accountId: account.id, type, schema, focusPath };
+        this.renderDetailModal(account);
+        this.focusDetailPath(focusPath);
+    }
+
+    async handleDetailFieldUpdate(event) {
+        if (!this.detailState || !event.target?.id)
+            return;
+        const { accountId, type, schema } = this.detailState;
+        const changedId = event.target.id;
+        const patch = FieldRenderer.parse(
+            schema,
+            this.detailContent,
+            '',
+            path => changedId.startsWith(FieldRenderer.getId(path))
+        );
+        if (type === 'status')
+            await accountManager.patchStatus(accountId, patch);
+        else
+            await accountManager.patchConfig(accountId, patch);
+        this.showToast(`${type === 'status' ? '状态' : '设置'}已更新`);
     }
 
     async handleAddAccount(event) {
@@ -277,7 +413,7 @@ class AccountsDashboard {
             .length;
     }
 
-    renderActivityPanel(items) {
+    renderActivityPanel(accountId, items) {
         if (!items.length)
             return '';
         return `
@@ -288,10 +424,10 @@ class AccountsDashboard {
                 </div>
                 <div class="activity-list">
                     ${items.map(item => `
-                        <span class="activity-item ${item.kind}" title="${this.escapeAttr(item.detail || '')}">
+                        <button type="button" class="activity-item ${item.kind}" title="${this.escapeAttr(item.detail || '')}" data-action="activityDetail" data-account-id="${this.escapeAttr(accountId)}" data-detail-type="${this.escapeAttr(item.targetType || 'status')}" data-detail-path="${this.escapeAttr(item.targetPath || '')}">
                             <span class="activity-name">${this.escapeHtml(item.name)}</span>
                             <span class="activity-state">${this.escapeHtml(item.state)}</span>
-                        </span>
+                        </button>
                     `).join('')}
                 </div>
             </div>
@@ -308,90 +444,96 @@ class AccountsDashboard {
             running: status.meditation?.inProgress,
             nextTime: status.meditation?.finishTime,
             fail: false,
-        });
+        }, 'meditation');
         this.addLoopItem(items, '种田', config.garden?.enabled, {
             healthy: status.garden?.inProgress || status.garden?.finishTime,
             fail: status.garden?.noSeeds || status.garden?.ripen?.noSeeds,
             failText: '种子不足',
-        });
+        }, 'garden');
         this.addBountyItem(items, status.bounty, config.bounty);
-        this.addFinishedItem(items, '秘境', config.secretRealm?.enabled, status.secretRealm);
-        this.addFinishedItem(items, '妖兽园', config.zoo?.enabled, status.zoo);
-        this.addFinishedItem(items, '幻境', config.dreamland?.enabled, status.dreamland);
-        this.addCountItem(items, '钓鱼', config.fishing?.enabled, status.fishing?.finishedCount || 0, this.expectedRuns(config.fishing?.levels), status.fishing?.inProgress, status.fishing?.pullTime);
-        this.addCountItem(items, '种树', config.wooding?.enabled, status.wooding?.finishedCount || 0, this.expectedRuns(config.wooding?.levels), status.wooding?.inProgress, status.wooding?.waterTime);
+        this.addFinishedItem(items, '秘境', config.secretRealm?.enabled, status.secretRealm, 'secretRealm');
+        this.addFinishedItem(items, '妖兽园', config.zoo?.enabled, status.zoo, 'zoo');
+        this.addFinishedItem(items, '幻境', config.dreamland?.enabled, status.dreamland, 'dreamland');
+        this.addCountItem(items, '钓鱼', config.fishing?.enabled, status.fishing?.finishedCount || 0, this.expectedRuns(config.fishing?.levels), status.fishing?.inProgress, status.fishing?.pullTime, 'fishing');
+        this.addCountItem(items, '种树', config.wooding?.enabled, status.wooding?.finishedCount || 0, this.expectedRuns(config.wooding?.levels), status.wooding?.inProgress, status.wooding?.waterTime, 'wooding');
         this.addFortuneItems(items, status.fortune, config.fortune);
         this.addBagItem(items, status.bag, config.bag);
         this.addMiscItems(items, status.misc, config.misc);
         this.addEventItems(items, status.event, config.event);
-        this.addTaskItem(items, '救援', config.rescue?.enabled, status.rescue?.finished, status.rescue?.arrivalTime, status.rescue?.rescueTaskProgress);
-        this.addTaskItem(items, '采集', config.gather?.enabled, status.gather?.finished, status.gather?.finishTime, status.gather?.gatherTaskProgress);
-        this.addTaskItem(items, '制符', config.rune?.enabled, status.rune?.finished, status.rune?.finishTime, Math.max(status.rune?.runeGathered || 0, status.rune?.runeMaked || 0));
-        this.addTaskItem(items, '法器', config.ritual?.enabled, status.ritual?.finished, status.ritual?.finishTime, Math.max(status.ritual?.ritualEastCount || 0, status.ritual?.ritualWestCount || 0));
-        this.addTaskItem(items, '屠宗', config.genocide?.enabled, status.genocide?.finished, status.genocide?.finishTime, Math.max(status.genocide?.elderCount || 0, status.genocide?.kaidonCount || 0, status.genocide?.monkCount || 0));
+        this.addTaskItem(items, '救援', config.rescue?.enabled, status.rescue?.finished, status.rescue?.arrivalTime, status.rescue?.rescueTaskProgress, 'rescue');
+        this.addTaskItem(items, '采集', config.gather?.enabled, status.gather?.finished, status.gather?.finishTime, status.gather?.gatherTaskProgress, 'gather');
+        this.addTaskItem(items, '制符', config.rune?.enabled, status.rune?.finished, status.rune?.finishTime, Math.max(status.rune?.runeGathered || 0, status.rune?.runeMaked || 0), 'rune');
+        this.addTaskItem(items, '法器', config.ritual?.enabled, status.ritual?.finished, status.ritual?.finishTime, Math.max(status.ritual?.ritualEastCount || 0, status.ritual?.ritualWestCount || 0), 'ritual');
+        this.addTaskItem(items, '屠宗', config.genocide?.enabled, status.genocide?.finished, status.genocide?.finishTime, Math.max(status.genocide?.elderCount || 0, status.genocide?.kaidonCount || 0, status.genocide?.monkCount || 0), 'genocide');
 
         return items;
     }
 
-    addDailyItem(items, name, enabled, { done, running, nextTime, fail, failText = '失败' }) {
+    addDailyItem(items, name, enabled, { done, running, nextTime, fail, failText = '失败' }, targetPath) {
+        const active = running || this.isFuture(nextTime);
+        if (active) {
+            items.push(this.activityItem(name, '进行中', 'running', this.formatDate(nextTime), 'status', targetPath));
+            return;
+        }
         if (!enabled || done)
             return;
         if (fail) {
-            items.push(this.activityItem(name, failText, 'fail'));
+            items.push(this.activityItem(name, failText, 'fail', '', 'status', targetPath));
             return;
         }
-        if (running || this.isFuture(nextTime)) {
-            items.push(this.activityItem(name, '进行中', 'running', this.formatDate(nextTime)));
-            return;
-        }
-        items.push(this.activityItem(name, '未完成', 'warn'));
+        items.push(this.activityItem(name, '未完成', 'warn', '', 'status', targetPath));
     }
 
-    addLoopItem(items, name, enabled, { healthy, fail, failText }) {
+    addLoopItem(items, name, enabled, { healthy, fail, failText }, targetPath) {
+        if (healthy)
+            return;
         if (!enabled)
             return;
         if (fail) {
-            items.push(this.activityItem(name, failText, 'fail'));
+            items.push(this.activityItem(name, failText, 'fail', '', 'status', targetPath));
             return;
         }
-        if (healthy)
-            return;
-        items.push(this.activityItem(name, '未正常运行', 'warn'));
+        items.push(this.activityItem(name, '未正常运行', 'warn', '', 'status', targetPath));
     }
 
-    addFinishedItem(items, name, enabled, status) {
-        if (!enabled || status?.isFinished)
+    addFinishedItem(items, name, enabled, status, targetPath) {
+        if (status?.isFinished)
             return;
         if (status?.inProgress) {
-            items.push(this.activityItem(name, '进行中', 'running'));
+            items.push(this.activityItem(name, '进行中', 'running', '', 'status', targetPath));
             return;
         }
-        items.push(this.activityItem(name, '未完成', 'warn'));
+        if (!enabled)
+            return;
+        items.push(this.activityItem(name, '未完成', 'warn', '', 'status', targetPath));
     }
 
-    addCountItem(items, name, enabled, count, expected, running, nextTime) {
-        if (!enabled || count >= expected)
-            return;
-        if (running || this.isFuture(nextTime)) {
-            items.push(this.activityItem(name, `进行中 ${count}/${expected}`, 'running', this.formatDate(nextTime)));
+    addCountItem(items, name, enabled, count, expected, running, nextTime, targetPath) {
+        const active = running || this.isFuture(nextTime);
+        if (active) {
+            items.push(this.activityItem(name, `进行中 ${count}/${expected}`, 'running', this.formatDate(nextTime), 'status', targetPath));
             return;
         }
-        items.push(this.activityItem(name, `未完成 ${count}/${expected}`, 'warn'));
+        if (!enabled || count >= expected)
+            return;
+        items.push(this.activityItem(name, `未完成 ${count}/${expected}`, 'warn', '', 'status', targetPath));
     }
 
     addBountyItem(items, status = {}, config = {}) {
-        if (!config.enabled)
-            return;
         const accepted = status.accepted || 0;
         const limit = status.limit || 0;
         if (limit > 0 && accepted >= limit)
             return;
+        if (this.isFuture(status.updateTime) || status.claimTimes?.length) {
+            items.push(this.activityItem('悬赏', `进行中 ${accepted}/${limit || '?'}`, 'running', this.formatDate(status.updateTime), 'status', 'bounty'));
+            return;
+        }
+        if (!config.enabled)
+            return;
         if (config.refreshLimit !== undefined && status.refreshCount >= config.refreshLimit && accepted < limit)
-            items.push(this.activityItem('悬赏', `失败 ${accepted}/${limit || '?'}`, 'fail'));
-        else if (this.isFuture(status.updateTime) || status.claimTimes?.length)
-            items.push(this.activityItem('悬赏', `进行中 ${accepted}/${limit || '?'}`, 'running', this.formatDate(status.updateTime)));
+            items.push(this.activityItem('悬赏', `失败 ${accepted}/${limit || '?'}`, 'fail', '', 'status', 'bounty'));
         else
-            items.push(this.activityItem('悬赏', `未完成 ${accepted}/${limit || '?'}`, 'warn'));
+            items.push(this.activityItem('悬赏', `未完成 ${accepted}/${limit || '?'}`, 'warn', '', 'status', 'bounty'));
     }
 
     addFortuneItems(items, status = {}, config = {}) {
@@ -409,83 +551,85 @@ class AccountsDashboard {
         ];
         const missing = checks.filter(([, done]) => !done).map(([name]) => name);
         if (missing.length)
-            items.push(this.activityItem('气运', `未完成 ${missing.length}项`, 'warn', missing.join('、')));
+            items.push(this.activityItem('气运', `未完成 ${missing.length}项`, 'warn', missing.join('、'), 'status', 'fortune'));
     }
 
     addBagItem(items, status = {}, config = {}) {
+        if (status.items?.length) {
+            items.push(this.activityItem('背包送道具', `进行中 ${status.items.length}项`, 'running', '', 'status', 'bag'));
+            return;
+        }
         if (!config.enabled)
             return;
         if (!config.target?.bytes_pb_reserve) {
-            items.push(this.activityItem('背包送道具', '缺少目标', 'fail'));
+            items.push(this.activityItem('背包送道具', '缺少目标', 'fail', '', 'config', 'bag'));
             return;
         }
-        if (status.items?.length)
-            items.push(this.activityItem('背包送道具', `进行中 ${status.items.length}项`, 'running'));
     }
 
     addMiscItems(items, status = {}, config = {}) {
-        if (!config.enabled)
-            return;
         const missing = [];
         const running = [];
-        this.collectBoolean(missing, '签到', status.signIn);
-        this.collectBoolean(missing, '送能量', status.sendEnergy);
-        this.collectBoolean(missing, '传功', status.transmission);
-        this.collectBoolean(missing, '宗门签到', status.sect?.signIn);
-        this.collectBoolean(missing, '宗门赐福', !config.sectBlessing || status.sect?.blessing);
-        this.collectBoolean(missing, '月卡', !config.subscribe?.enabled || status.subscribe);
-        this.collectBoolean(missing, '送礼物', !config.gift?.enabled || status.gift);
-        this.collectBoolean(missing, '福泽', status.fortune);
-        this.collectBoolean(missing, '收能量', status.receiveEnergy);
-        this.collectBoolean(missing, '接收传功', status.receiveTransmission);
-        this.collectBoolean(missing, '任务奖励', status.receiveTaskReward);
-        this.collectBoolean(missing, '接收赐福', status.receiveBlessing);
-        this.collectCount(missing, '砍一刀', status.kill?.count, 10);
-        this.collectCount(missing, '噬魂兽', status.challenge?.count, 3);
-        this.collectCount(missing, '锻造', status.forge?.count, config.forgeLimit || 50);
-        this.collectCount(missing, '通天塔', status.tower?.count, 5);
-        this.collectCount(missing, '膜拜', status.worship?.count, 10);
-        this.collectFight(missing, status.fight, config.fight?.enabled);
-        this.collectFlow(missing, running, '洞府', status.abode);
-        this.collectFlow(missing, running, '宗门任务', status.sect?.task);
-        this.collectFlow(missing, running, '大混战', status.battleSignUp);
-        if (config.fightPet?.enabled)
-            this.collectFlow(missing, running, '灵宠对决', status.fightPet);
-        this.collectFlow(missing, running, '地狱寻宝', status.hell);
-        if (config.levelUp?.enabled)
-            this.collectFlow(missing, running, '提升境界', status.levelUp);
+        const enabled = Boolean(config.enabled);
+        this.collectFlow(missing, running, '洞府', status.abode, enabled);
+        this.collectFlow(missing, running, '宗门任务', status.sect?.task, enabled);
+        this.collectFlow(missing, running, '大混战', status.battleSignUp, enabled);
+        this.collectFlow(missing, running, '灵宠对决', status.fightPet, enabled && config.fightPet?.enabled);
+        this.collectFlow(missing, running, '地狱寻宝', status.hell, enabled);
+        this.collectFlow(missing, running, '提升境界', status.levelUp, enabled && config.levelUp?.enabled);
+        if (config.enabled) {
+            this.collectBoolean(missing, '签到', status.signIn);
+            this.collectBoolean(missing, '送能量', status.sendEnergy);
+            this.collectBoolean(missing, '传功', status.transmission);
+            this.collectBoolean(missing, '宗门签到', status.sect?.signIn);
+            this.collectBoolean(missing, '宗门赐福', !config.sectBlessing || status.sect?.blessing);
+            this.collectBoolean(missing, '月卡', !config.subscribe?.enabled || status.subscribe);
+            this.collectBoolean(missing, '送礼物', !config.gift?.enabled || status.gift);
+            this.collectBoolean(missing, '福泽', status.fortune);
+            this.collectBoolean(missing, '收能量', status.receiveEnergy);
+            this.collectBoolean(missing, '接收传功', status.receiveTransmission);
+            this.collectBoolean(missing, '任务奖励', status.receiveTaskReward);
+            this.collectBoolean(missing, '接收赐福', status.receiveBlessing);
+            this.collectCount(missing, '砍一刀', status.kill?.count, 10);
+            this.collectCount(missing, '噬魂兽', status.challenge?.count, 3);
+            this.collectCount(missing, '锻造', status.forge?.count, config.forgeLimit || 50);
+            this.collectCount(missing, '通天塔', status.tower?.count, 5);
+            this.collectCount(missing, '膜拜', status.worship?.count, 10);
+            this.collectFight(missing, status.fight, config.fight?.enabled);
+        }
 
         if (running.length)
-            items.push(this.activityItem('日常', `进行中 ${running.length}项`, 'running', running.join('、')));
-        if (missing.length)
-            items.push(this.activityItem('日常', `未完成 ${missing.length}项`, 'warn', missing.slice(0, 12).join('、')));
+            items.push(this.activityItem('日常', `进行中 ${running.length}项`, 'running', running.join('、'), 'status', 'misc'));
+        if (config.enabled && missing.length)
+            items.push(this.activityItem('日常', `未完成 ${missing.length}项`, 'warn', missing.slice(0, 12).join('、'), 'status', 'misc'));
     }
 
     addEventItems(items, status = {}, config = {}) {
-        if (!config.enabled)
-            return;
         const missing = [];
         const running = [];
-        this.collectFlow(missing, running, '礼包', status.package);
-        this.collectFlow(missing, running, '扭蛋', status.capsule);
-        this.collectFlow(missing, running, '血魔谷', { inProgress: !status.senior?.isFinished && status.senior?.currentPosition, isFinished: status.senior?.isFinished });
-        this.collectFlow(missing, running, '传送', status.travel);
-        if ((status.mining?.stamina ?? 30) > 0)
+        const enabled = Boolean(config.enabled);
+        this.collectFlow(missing, running, '礼包', status.package, enabled && config.package);
+        this.collectFlow(missing, running, '扭蛋', status.capsule, enabled);
+        this.collectFlow(missing, running, '血魔谷', { inProgress: !status.senior?.isFinished && status.senior?.currentPosition, isFinished: status.senior?.isFinished }, enabled);
+        this.collectFlow(missing, running, '传送', status.travel, enabled);
+        if (config.enabled && (status.mining?.stamina ?? 30) > 0)
             missing.push('挖矿');
         if (running.length)
-            items.push(this.activityItem('活动', `进行中 ${running.length}项`, 'running', running.join('、')));
-        if (missing.length)
-            items.push(this.activityItem('活动', `未完成 ${missing.length}项`, 'warn', missing.join('、')));
+            items.push(this.activityItem('活动', `进行中 ${running.length}项`, 'running', running.join('、'), 'status', 'event'));
+        if (config.enabled && missing.length)
+            items.push(this.activityItem('活动', `未完成 ${missing.length}项`, 'warn', missing.join('、'), 'status', 'event'));
     }
 
-    addTaskItem(items, name, enabled, finished, nextTime, progress) {
-        if (!enabled || finished)
+    addTaskItem(items, name, enabled, finished, nextTime, progress, targetPath) {
+        if (finished)
             return;
         if (this.isFuture(nextTime) || progress) {
-            items.push(this.activityItem(name, '进行中', 'running', this.formatDate(nextTime)));
+            items.push(this.activityItem(name, '进行中', 'running', this.formatDate(nextTime), 'status', targetPath));
             return;
         }
-        items.push(this.activityItem(name, '未完成', 'warn'));
+        if (!enabled)
+            return;
+        items.push(this.activityItem(name, '未完成', 'warn', '', 'status', targetPath));
     }
 
     collectBoolean(missing, name, done) {
@@ -510,22 +654,23 @@ class AccountsDashboard {
         this.collectCount(missing, '宗门切磋', fight.sectCount, 10);
     }
 
-    collectFlow(missing, running, name, flow = {}) {
+    collectFlow(missing, running, name, flow = {}, enabled = true) {
         if (flow?.isFinished)
             return;
-        if (flow?.inProgress) {
+        if (flow?.inProgress || this.isFuture(flow?.nextTime)) {
             running.push(name);
             return;
         }
-        missing.push(name);
+        if (enabled)
+            missing.push(name);
     }
 
     expectedRuns(levels = []) {
         return levels.length >= 2 ? 2 : 1;
     }
 
-    activityItem(name, state, kind, detail = '') {
-        return { name, state, kind, detail };
+    activityItem(name, state, kind, detail = '', targetType = 'status', targetPath = '') {
+        return { name, state, kind, detail, targetType, targetPath };
     }
 
     isFuture(value) {

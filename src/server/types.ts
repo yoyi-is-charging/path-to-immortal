@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { AccountManager } from './core/AccountManager';
 import { InstanceManager } from './core/InstanceManager';
 import { GameInstance } from './core/GameInstance';
-import { time } from 'console';
+
+export const GARDEN_SEED_TYPES = ['仙露草种子', '灵芝种子', '九叶灵草种子', '龙木种子', '星露种子'] as const;
 
 export interface RouterDependencies {
     accountManager: AccountManager;
@@ -65,6 +66,10 @@ const GardenStatusSchema = z.object({
     inProgress: z.boolean().optional().describe('进行中'),
     finishTime: z.coerce.date().optional().describe('结束时刻'),
     noSeeds: z.boolean().optional().describe('种子不足'),
+    seedFallback: z.object({
+        originalSeed: z.string().optional().describe('原始种子类型'),
+        triedSeeds: z.array(z.string()).optional().describe('已尝试种子类型'),
+    }).optional().describe('种子轮换状态'),
     ripen: z.object({
         ripeCount: z.number().optional().describe('剩余催熟次数'),
         noSeeds: z.boolean().optional().describe('种子不足'),
@@ -347,10 +352,10 @@ const MeditationConfigSchema = z.object({
 
 const GardenConfigSchema = z.object({
     enabled: z.boolean().optional().describe('启用自动种田'),
-    seedType: z.enum(['仙露草种子', '灵芝种子', '九叶灵草种子', '龙木种子', '星露种子']).optional().describe('种子类型'),
+    seedType: z.enum(GARDEN_SEED_TYPES).optional().describe('种子类型'),
     ripen: z.object({
         enabled: z.boolean().optional().describe('启用催熟'),
-        seedType: z.enum(['仙露草种子', '灵芝种子', '九叶灵草种子', '龙木种子', '星露种子']).optional().describe('催熟种子类型'),
+        seedType: z.enum(GARDEN_SEED_TYPES).optional().describe('催熟种子类型'),
     }).optional().describe('催熟配置'),
 }).describe('种田配置');
 

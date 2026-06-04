@@ -1,7 +1,7 @@
 // src/server/core/GameInstance.ts
 import { Browser, BrowserContext, chromium, Page, Response } from 'playwright-core';
 import { CommandScheduler } from './CommandScheduler';
-import { Status, MessageBody, Command, Account } from '../types';
+import { Status, MessageBody, Command, Account, Config } from '../types';
 import { logger } from '../../utils/logger';
 import { DebugLog } from '../../utils/DebugLog';
 import { Request } from 'playwright-core';
@@ -530,6 +530,11 @@ export class GameInstance {
     public async updateStatus(status: Partial<Status>) {
         DebugLog.log('status', 'patch.request', DebugLog.statusPatch(this.account.id, status));
         await AccountManager.patchStatus(this.account.id, status);
+    }
+
+    public async updateConfig(config: Partial<Config>) {
+        DebugLog.log('config', 'patch.request', DebugLog.configPatch(this.account.id, config));
+        await AccountManager.patchConfig(this.account.id, config);
     }
 
     public async scheduleCommand(command: Command, delay: number = 0) {

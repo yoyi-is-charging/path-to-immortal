@@ -1,5 +1,6 @@
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readNumberAfter, readNumberedLines, readNumberFromLine } from '../../utils/FieldExtractor';
@@ -37,8 +38,7 @@ export default class DreamlandHandler implements CommandHandler {
         instance.account.status.dreamland = instance.account.status.dreamland || {};
         const dreamlandResponse = this.parseResponse(response);
         const effects = this.transition(dreamlandResponse);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'dreamland', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -96,17 +96,4 @@ export default class DreamlandHandler implements CommandHandler {
         }
     }
 
-    private async applyEffect(effect: DreamlandEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ dreamland: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command, effect.delay);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

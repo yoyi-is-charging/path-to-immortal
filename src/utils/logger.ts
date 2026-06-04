@@ -11,16 +11,53 @@ fs.mkdirSync(LOG_DIR, { recursive: true });
 const DEBUG_LOG_ENABLED = /^(1|true|yes|on)$/i.test(process.env.DEBUG_LOG ?? '');
 const LOG_LEVEL = (process.env.LOG_LEVEL || (DEBUG_LOG_ENABLED ? 'debug' : 'info')).toLowerCase();
 
-const jsonFormat = winston.format.combine(
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date) && !(value instanceof Error);
+};
+
+const pruneMetadataValue = (value: unknown): unknown => {
+    if (value === undefined)
+        return undefined;
+    if (!isPlainObject(value))
+        return value;
+    const entries = Object.entries(value)
+        .map(([key, item]) => [key, pruneMetadataValue(item)] as const)
+        .filter(([, item]) => item !== undefined);
+    return entries.length ? Object.fromEntries(entries) : undefined;
+};
+
+const stringifyMetadata = (metadata: Record<string, unknown>) => {
+    const entries = Object.entries(metadata)
+        .map(([key, value]) => [key, pruneMetadataValue(value)] as const)
+        .filter(([, value]) => value !== undefined);
+    return entries.length ? ` ${JSON.stringify(Object.fromEntries(entries))}` : '';
+};
+
+const readablePrintf = winston.format.printf(info => {
+    const metadata = { ...((info.metadata as Record<string, unknown> | undefined) ?? {}) };
+    const debugEvent = metadata.scope && metadata.event
+        ? `${metadata.scope}.${metadata.event}`
+        : undefined;
+    const message = debugEvent && info.message === debugEvent ? debugEvent : info.message;
+    if (debugEvent && info.message === debugEvent) {
+        delete metadata.scope;
+        delete metadata.event;
+    }
+    const stack = info.stack ? `\n${info.stack}` : '';
+    return `${info.timestamp} ${String(info.level).toUpperCase().padEnd(5)} ${message}${stringifyMetadata(metadata)}${stack}`;
+});
+
+const readableFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
     winston.format.errors({ stack: true }),
+    winston.format.splat(),
     winston.format.metadata({ fillExcept: ['message', 'level', 'timestamp', 'stack'] }),
-    winston.format.json()
+    readablePrintf,
 );
 
 export const logger = winston.createLogger({
     level: LOG_LEVEL,
-    format: jsonFormat,
+    format: readableFormat,
     transports: [
         new winston.transports.File({
             filename: path.join(LOG_DIR, 'error.log'),
@@ -44,12 +81,10 @@ if (process.env.NODE_ENV !== 'production') {
         format: winston.format.combine(
             winston.format.colorize(),
             winston.format.timestamp({ format: 'HH:mm:ss.SSS' }),
-            winston.format.printf(info => {
-                const metadata = info.metadata && Object.keys(info.metadata).length
-                    ? ` ${JSON.stringify(info.metadata)}`
-                    : '';
-                return `${info.timestamp} ${info.level}: ${info.message}${metadata}`;
-            })
+            winston.format.errors({ stack: true }),
+            winston.format.splat(),
+            winston.format.metadata({ fillExcept: ['message', 'level', 'timestamp', 'stack'] }),
+            readablePrintf,
         )
     }));
 }

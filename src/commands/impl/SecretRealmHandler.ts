@@ -2,6 +2,7 @@
 
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readLineValue, readSkillOptions } from '../../utils/FieldExtractor';
@@ -40,8 +41,7 @@ export default class SecretRealmHandler implements CommandHandler {
         const config = instance.account.config.secretRealm!;
         const secretRealmResponse = this.parseResponse(response);
         const effects = this.transition(secretRealmResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'secretRealm', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -114,17 +114,4 @@ export default class SecretRealmHandler implements CommandHandler {
             ?? skills[0];
     }
 
-    private async applyEffect(effect: SecretRealmEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ secretRealm: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command, effect.delay);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

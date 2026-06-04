@@ -1,6 +1,7 @@
 import { GameInstance } from '../../server/core/GameInstance';
 import { Command, Config, MessageBody, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { readLineCounts } from '../../utils/FieldExtractor';
 
 type BagStatus = NonNullable<Status['bag']>;
@@ -40,8 +41,7 @@ export default class BagHandler implements CommandHandler {
         const config = instance.account.config.bag;
         const bagResponse = this.parseResponse(command, response);
         const effects = this.transition(status, bagResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'bag' });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -113,14 +113,4 @@ export default class BagHandler implements CommandHandler {
         return [{ type: 'scheduleCommand', command: { type: 'bag_sendItem', body } }];
     }
 
-    private async applyEffect(effect: BagEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ bag: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-        }
-    }
 }

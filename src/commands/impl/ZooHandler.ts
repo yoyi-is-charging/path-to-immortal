@@ -1,5 +1,6 @@
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readMonsterLayout, readNumberAfter } from '../../utils/FieldExtractor';
@@ -44,8 +45,7 @@ export default class ZooHandler implements CommandHandler {
         const config = instance.account.config.zoo!;
         const zooResponse = this.parseResponse(response);
         const effects = this.transition(zooResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'zoo', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -122,17 +122,4 @@ export default class ZooHandler implements CommandHandler {
         return choice;
     }
 
-    private async applyEffect(effect: ZooEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ zoo: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command, effect.delay);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

@@ -2,6 +2,7 @@
 
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readFullDate, readTaskProgress } from '../../utils/FieldExtractor';
@@ -52,8 +53,7 @@ export default class GenocideHandler implements CommandHandler {
         const config = instance.account.config.genocide!;
         const genocideResponse = this.parseResponse(command, response);
         const effects = this.transition(genocideResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'genocide', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -132,28 +132,18 @@ export default class GenocideHandler implements CommandHandler {
             case 'ambushDone': {
                 const effects: GenocideEffect[] = [];
                 if (response.dailyLimit)
-                    effects.push({ type: 'patchStatus', status: { finished: true } });
+                    effects.push({ type: 'patchStatus', status: { finished: true, finishTime: undefined } });
                 effects.push({ type: 'registerScheduler' });
                 return effects;
             }
             case 'claimed':
-                return [{ type: 'scheduleCommand', command: { type: 'genocide', body: GENOCIDE_COMMAND.status } }];
+                return [
+                    { type: 'patchStatus', status: { finished: true, finishTime: undefined } },
+                    { type: 'registerScheduler' },
+                ];
             case 'unmatched':
                 return [];
         }
     }
 
-    private async applyEffect(effect: GenocideEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ genocide: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

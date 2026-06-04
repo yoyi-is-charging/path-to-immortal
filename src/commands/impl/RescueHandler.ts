@@ -1,5 +1,6 @@
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readFullDate, readTaskProgress } from '../../utils/FieldExtractor';
@@ -50,8 +51,7 @@ export default class RescueHandler implements CommandHandler {
         const config = instance.account.config.rescue!;
         const rescueResponse = this.parseResponse(command, response);
         const effects = this.transition(rescueResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'rescue', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -109,28 +109,18 @@ export default class RescueHandler implements CommandHandler {
             case 'flightFinished': {
                 const effects: RescueEffect[] = [];
                 if (response.dailyLimit)
-                    effects.push({ type: 'patchStatus', status: { finished: true } });
+                    effects.push({ type: 'patchStatus', status: { finished: true, arrivalTime: undefined } });
                 effects.push({ type: 'registerScheduler' });
                 return effects;
             }
             case 'claimed':
-                return [{ type: 'scheduleCommand', command: { type: 'rescue', body: RESCUE_COMMAND.status } }];
+                return [
+                    { type: 'patchStatus', status: { finished: true, arrivalTime: undefined } },
+                    { type: 'registerScheduler' },
+                ];
             case 'unmatched':
                 return [];
         }
     }
 
-    private async applyEffect(effect: RescueEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ rescue: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

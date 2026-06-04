@@ -4,6 +4,7 @@ import { GameInstance } from "../../server/core/GameInstance";
 import { Command, Status } from "../../server/types";
 import { getDate } from "../../utils/TimeUtils";
 import { CommandHandler } from "../CommandHandler";
+import { runEffects } from "../EffectRunner";
 
 type FortuneStatus = NonNullable<Status['fortune']>;
 type FortuneResponse = { type: 'completed'; commandType: string };
@@ -39,8 +40,7 @@ export default class FortuneHandler implements CommandHandler {
         instance.account.status.fortune = instance.account.status.fortune || {};
         const fortuneResponse = this.parseResponse(command);
         const effects = this.transition(instance.account.status.fortune, fortuneResponse);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'fortune', registerTypeScheduler: (target, commandType) => this.registerTypeScheduler(target, commandType) });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -123,14 +123,4 @@ export default class FortuneHandler implements CommandHandler {
         }
     }
 
-    private async applyEffect(effect: FortuneEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ fortune: effect.status });
-                break;
-            case 'registerTypeScheduler':
-                this.registerTypeScheduler(instance, effect.commandType);
-                break;
-        }
-    }
 }

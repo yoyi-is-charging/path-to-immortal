@@ -25,6 +25,14 @@
             --accent: #245a9a;
             --radius: 8px;
             --shadow: 0 1px 3px rgba(20, 32, 42, 0.08);
+            --md-sys-color-primary: #245a9a;
+            --md-sys-color-on-primary: #ffffff;
+            --md-sys-color-primary-container: #d7e8fb;
+            --md-sys-color-on-primary-container: #0d2b4a;
+            --md-sys-color-secondary-container: #e4edf7;
+            --md-sys-color-on-secondary-container: #152a3d;
+            --md-sys-color-outline: #9aa6b2;
+            --md-sys-shape-corner-extra-large: 8px;
         }
 
         * {
@@ -257,6 +265,7 @@
         }
 
         .activity-item {
+            appearance: none;
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -266,7 +275,20 @@
             border: 1px solid var(--line);
             border-radius: 999px;
             background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font: inherit;
             font-size: 12px;
+            text-align: left;
+        }
+
+        .activity-item:hover {
+            border-color: var(--accent);
+        }
+
+        .activity-item:focus-visible {
+            outline: 2px solid rgba(36, 90, 154, 0.32);
+            outline-offset: 2px;
         }
 
         .activity-name {
@@ -380,6 +402,181 @@
             min-width: min(420px, calc(100vw - 48px));
         }
 
+        .detail-dialog {
+            --detail-dialog-width: min(980px, calc(100vw - 40px));
+            --md-dialog-container-color: var(--surface);
+            --md-dialog-container-shape: var(--radius);
+            width: var(--detail-dialog-width) !important;
+            min-width: var(--detail-dialog-width) !important;
+            max-width: var(--detail-dialog-width) !important;
+            height: fit-content !important;
+            max-height: none !important;
+        }
+
+        .detail-dialog-shell {
+            display: grid;
+            grid-template-rows: auto auto;
+            width: var(--detail-dialog-width);
+            max-height: none;
+            overflow: visible;
+            padding: 0 !important;
+            color: var(--text);
+        }
+
+        .detail-dialog-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--line);
+            background: #fbfcfd;
+        }
+
+        .detail-dialog-title {
+            margin: 0;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            font-size: 20px;
+            font-weight: 650;
+            letter-spacing: 0;
+        }
+
+        .detail-dialog-tabs {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .detail-dialog-tabs md-outlined-button.selected {
+            --md-outlined-button-label-text-color: var(--accent);
+            --md-outlined-button-outline-color: var(--accent);
+            --md-outlined-button-container-color: #f1f7ff;
+        }
+
+        .schema-panel {
+            display: grid;
+            gap: 12px;
+            max-height: min(72vh, 760px);
+            padding: 18px 20px 22px;
+            overflow-y: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            background: var(--surface);
+        }
+
+        .schema-panel::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
+        .schema-panel .schema-section {
+            display: grid;
+            background: var(--surface);
+        }
+
+        .schema-panel .schema-section-header {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--line);
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 650;
+        }
+
+        .schema-panel details.schema-section>.schema-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            list-style: none;
+        }
+
+        .schema-panel details.schema-section>.schema-section-header::-webkit-details-marker {
+            display: none;
+        }
+
+        .schema-panel details.schema-section>.schema-section-header::after {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-right: 2px solid var(--muted);
+            border-bottom: 2px solid var(--muted);
+            transform: rotate(45deg);
+            transition: transform 160ms ease;
+        }
+
+        .schema-panel details.schema-section[open]>.schema-section-header::after {
+            transform: rotate(225deg);
+        }
+
+        .schema-panel .schema-section-body {
+            display: grid;
+            gap: 0;
+        }
+
+        .schema-panel>.schema-section>.schema-section-body {
+            display: grid;
+            gap: 12px;
+        }
+
+        .schema-panel>.schema-section>.schema-section-body>.schema-section {
+            width: 100%;
+            margin: 0 0 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: #fbfcfd;
+            overflow: hidden;
+        }
+
+        .schema-panel .schema-section.focus-target {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(36, 90, 154, 0.16);
+        }
+
+        .schema-panel>.schema-section>.schema-section-body>.schema-section>.schema-section-body {
+            padding: 0 14px;
+        }
+
+        .schema-panel .schema-row {
+            min-height: 66px;
+            padding: 12px 0;
+            display: grid;
+            align-items: center;
+        }
+
+        .schema-panel label {
+            display: grid;
+            grid-template-columns: minmax(150px, 0.7fr) minmax(240px, 1.3fr);
+            align-items: center;
+            gap: 18px;
+            width: 100%;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .schema-panel md-outlined-text-field,
+        .schema-panel md-outlined-select {
+            width: 100%;
+        }
+
+        .schema-panel .schema-time {
+            padding: 12px 0;
+        }
+
+        .schema-panel .field.time {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+            align-items: center;
+            gap: 8px;
+        }
+
+        .schema-panel .schema-divider {
+            height: 1px;
+            background: var(--line);
+        }
+
         #qr-code {
             display: block;
             width: 240px;
@@ -418,6 +615,33 @@
             .detail-grid,
             .command-row {
                 grid-template-columns: 1fr;
+            }
+
+            .detail-dialog-shell {
+                width: calc(100vw - 24px);
+                max-width: calc(100vw - 24px);
+            }
+
+            .detail-dialog,
+            .detail-dialog.columns-1,
+            .detail-dialog.columns-2,
+            .detail-dialog.columns-3 {
+                --detail-dialog-width: calc(100vw - 24px);
+            }
+
+            .detail-dialog-header {
+                align-items: stretch;
+                flex-direction: column;
+                padding: 16px;
+            }
+
+            .schema-panel label {
+                align-items: stretch;
+                grid-template-columns: 1fr;
+            }
+
+            .schema-panel {
+                padding: 16px;
             }
         }
     </style>
@@ -482,6 +706,19 @@
         <img id="qr-code" src="" alt="二维码" slot="content">
         <div slot="actions">
             <md-text-button id="close-qr-dialog">关闭</md-text-button>
+        </div>
+    </md-dialog>
+
+    <md-dialog id="account-detail-dialog" class="detail-dialog">
+        <div slot="content" class="detail-dialog-shell">
+            <div class="detail-dialog-header">
+                <h2 id="detail-dialog-title" class="detail-dialog-title">账户详情</h2>
+                <div class="detail-dialog-tabs" aria-label="详情类型">
+                    <md-outlined-button type="button" data-detail-switch="status">状态</md-outlined-button>
+                    <md-outlined-button type="button" data-detail-switch="config">设置</md-outlined-button>
+                </div>
+            </div>
+            <div id="detail-dialog-content" class="schema-panel"></div>
         </div>
     </md-dialog>
 

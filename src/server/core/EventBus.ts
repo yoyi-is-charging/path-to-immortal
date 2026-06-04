@@ -11,9 +11,21 @@ export class EventBus {
     private static listeners: Partial<{ [K in keyof RuntimeEventMap]: Array<EventListener<RuntimeEventMap[K]>> }> = {};
 
     public static init() {
-        EventBus.on('commandFailed', ({ accountId, command, error, response }: { accountId: string, command: Command, error: string, response: string }) => logger.info(`Command failed for account ${accountId}: ${command.type} - ${error} - ${response}`));
-        EventBus.on('processCommandError', ({ accountId, command, error }: { accountId: string, command: Command, error: string }) => logger.error(`Error processing command ${command.type} for account ${accountId}: ${error}`));
-        EventBus.on('sessionUpdateScheduled', ({ accountId, timestamp }: { accountId: string, timestamp: number }) => logger.info(`Relogin scheduled for account ${accountId} at ${new Date(timestamp).toLocaleString()}`));
+        EventBus.on('commandFailed', ({ accountId, command, error, response }: { accountId: string, command: Command, error: string, response: string }) => logger.warn('command.failed', {
+            accountId,
+            commandType: command.type,
+            error,
+            response: DebugLog.preview(response),
+        }));
+        EventBus.on('processCommandError', ({ accountId, command, error }: { accountId: string, command: Command, error: string }) => logger.error('command.processError', {
+            accountId,
+            commandType: command.type,
+            error,
+        }));
+        EventBus.on('sessionUpdateScheduled', ({ accountId, timestamp }: { accountId: string, timestamp: number }) => logger.info('session.reloginScheduled', {
+            accountId,
+            scheduledAt: new Date(timestamp).toISOString(),
+        }));
         logger.info('Runtime event bus initialized');
     }
 

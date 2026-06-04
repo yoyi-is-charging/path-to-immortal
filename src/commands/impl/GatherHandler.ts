@@ -1,5 +1,6 @@
 import { Command, Config, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { readFullDate, readNumberAfter, readTaskProgress } from '../../utils/FieldExtractor';
@@ -11,6 +12,7 @@ type GatherResponse =
     | { type: 'available'; taskId: number; limit: number }
     | { type: 'current'; taskId: number; limit: number; progress: number; finishTime?: Date; nextHoleId?: number; canCollect: boolean }
     | { type: 'claimAvailable' }
+    | { type: 'claimed' }
     | { type: 'recheck' }
     | { type: 'unmatched' };
 
@@ -50,8 +52,7 @@ export default class GatherHandler implements CommandHandler {
         const config = instance.account.config.gather!;
         const gatherResponse = this.parseResponse(command, response);
         const effects = this.transition(gatherResponse, config);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'gather', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -68,6 +69,8 @@ export default class GatherHandler implements CommandHandler {
     }
 
     private parseResponse(command: Command, response: string): GatherResponse {
+        if (command.type === 'gather_claim')
+            return { type: 'claimed' };
         if (command.type !== 'gather')
             return { type: 'recheck' };
         const task = readTaskProgress(response);
@@ -115,6 +118,11 @@ export default class GatherHandler implements CommandHandler {
             }
             case 'claimAvailable':
                 return [{ type: 'scheduleCommand', command: { type: 'gather_claim', body: GATHER_COMMAND.claim } }];
+            case 'claimed':
+                return [
+                    { type: 'patchStatus', status: { finished: true, finishTime: undefined } },
+                    { type: 'registerScheduler' },
+                ];
             case 'recheck':
                 return [{ type: 'scheduleCommand', command: { type: 'gather', body: GATHER_COMMAND.status } }];
             case 'unmatched':
@@ -122,17 +130,4 @@ export default class GatherHandler implements CommandHandler {
         }
     }
 
-    private async applyEffect(effect: GatherEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ gather: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(instance);
-                break;
-        }
-    }
 }

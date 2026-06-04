@@ -1,5 +1,6 @@
 import { Command, Status } from '../../server/types';
 import { CommandHandler } from '../CommandHandler';
+import { runEffects } from '../EffectRunner';
 import { GameInstance } from '../../server/core/GameInstance';
 import { getDate } from '../../utils/TimeUtils';
 import { InstanceManager } from '../../server/core/InstanceManager';
@@ -49,8 +50,7 @@ export default class MeditationHandler implements CommandHandler {
         instance.account.status.meditation = instance.account.status.meditation || {};
         const meditationResponse = this.parseResponse(command, response);
         const effects = this.transition(command, meditationResponse, instance);
-        for (const effect of effects)
-            await this.applyEffect(effect);
+        await runEffects(effects, { instance, statusKey: 'meditation', handler: this });
     }
 
     async handleError(command: Command, error: Error, instance: GameInstance) {
@@ -231,17 +231,4 @@ export default class MeditationHandler implements CommandHandler {
         return undefined;
     }
 
-    private async applyEffect(effect: MeditationEffect) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await effect.instance.updateStatus({ meditation: effect.status });
-                break;
-            case 'scheduleCommand':
-                await effect.instance.scheduleCommand(effect.command, effect.delay);
-                break;
-            case 'registerScheduler':
-                this.registerScheduler(effect.instance);
-                break;
-        }
-    }
 }

@@ -3,6 +3,7 @@ import { Command, Config, Status } from "../../server/types";
 import { getDate } from "../../utils/TimeUtils";
 import { readCoordinate, readMiningEventFields, readMiningFields, readStartedPackageCodes } from "../../utils/FieldExtractor";
 import { CommandHandler } from "../CommandHandler";
+import { runEffects } from "../EffectRunner";
 
 type EventStatus = NonNullable<Status['event']>;
 type EventConfig = NonNullable<Config['event']>;
@@ -90,8 +91,7 @@ export default class EventHandler implements CommandHandler {
         instance.account.status.event = instance.account.status.event || {};
         const eventResponse = this.parseResponse(command, response, instance);
         const effects = this.transition(eventResponse, instance);
-        for (const effect of effects)
-            await this.applyEffect(effect, instance);
+        await runEffects(effects, { instance, statusKey: 'event', registerTypeScheduler: (target, commandType) => this.registerTypeScheduler(target, commandType) });
     }
 
     private parseResponse(command: Command, response: string, instance: GameInstance): EventResponse {
@@ -312,19 +312,6 @@ export default class EventHandler implements CommandHandler {
         return { x: -1, y: -1 };
     }
 
-    private async applyEffect(effect: EventEffect, instance: GameInstance) {
-        switch (effect.type) {
-            case 'patchStatus':
-                await instance.updateStatus({ event: effect.status });
-                break;
-            case 'scheduleCommand':
-                await instance.scheduleCommand(effect.command, effect.delay);
-                break;
-            case 'registerTypeScheduler':
-                this.registerTypeScheduler(instance, effect.commandType);
-                break;
-        }
-    }
     async handleError(command: Command, error: Error, instance: GameInstance): Promise<Command | undefined> {
         command.retries = (command.retries || 0) + 1;
         if (command.type.startsWith('event_mining'))
