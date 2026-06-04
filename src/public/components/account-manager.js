@@ -65,9 +65,9 @@ export class AccountManager {
 
     async loadAccounts() {
         const accounts = await wsClient.request({ action: 'getAccounts' });
-        this.accounts = accounts;
-        eventBus.emit('accountsLoaded', accounts);
-        return accounts;
+        this.accounts = accounts.map(account => this.withLiveState(account));
+        eventBus.emit('accountsLoaded', this.accounts);
+        return this.accounts;
     }
 
     async loadAccount(accountId) {
@@ -87,11 +87,21 @@ export class AccountManager {
     }
 
     upsertAccount(account) {
+        account = this.withLiveState(account);
         const accountIndex = this.accounts.findIndex(a => a.id === account.id);
         if (accountIndex >= 0)
             this.accounts[accountIndex] = account;
         else
             this.accounts.push(account);
+    }
+
+    withLiveState(account) {
+        const existing = this.getAccount(account.id);
+        return {
+            ...account,
+            scheduledCommands: account.scheduledCommands ?? existing?.scheduledCommands ?? [],
+            pendingCommands: account.pendingCommands ?? existing?.pendingCommands ?? [],
+        };
     }
 }
 

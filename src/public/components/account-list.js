@@ -36,7 +36,10 @@ class AccountsDashboard {
         this.accountsList.addEventListener('click', event => this.handleActionClick(event));
         this.accountsList.addEventListener('keydown', event => this.handleCommandKeydown(event));
 
-        eventBus.on('accountsLoaded', accounts => this.render(accounts));
+        eventBus.on('accountsLoaded', accounts => {
+            accounts.forEach(account => this.cacheCommands(account));
+            this.render(accounts);
+        });
         eventBus.on('statusUpdated', account => this.updateAccount(account));
         eventBus.on('configUpdated', account => this.updateAccount(account));
         eventBus.on('accountLoaded', account => this.updateAccount(account));
@@ -80,14 +83,17 @@ class AccountsDashboard {
         this.render(accountManager.accounts.filter(item => item.id !== account.id));
     }
 
-    updateCommands({ id, scheduledCommands = [], pendingCommands = [] }) {
-        this.commandsByAccount.set(id, { scheduledCommands, pendingCommands });
+    updateCommands(account) {
+        if (!account?.id)
+            return;
+        accountManager.upsertAccount(account);
+        this.cacheCommands(account);
         this.render(accountManager.accounts);
     }
 
     renderAccount(account) {
         const session = this.getSessionInfo(account);
-        const commands = this.commandsByAccount.get(account.id) || { scheduledCommands: [], pendingCommands: [] };
+        const commands = this.getCommands(account);
         const commandCount = commands.scheduledCommands.length + commands.pendingCommands.length;
         const enabledCount = this.getEnabledFeatures(account);
         const activityItems = this.getActivityItems(account);
@@ -370,11 +376,28 @@ class AccountsDashboard {
     updateMetrics(accounts) {
         const online = accounts.filter(account => account.online).length;
         const validSessions = accounts.filter(account => this.getSessionInfo(account).isValid).length;
-        const commandCount = [...this.commandsByAccount.values()].reduce((sum, item) => sum + item.scheduledCommands.length + item.pendingCommands.length, 0);
+        const commandCount = accounts.reduce((sum, account) => {
+            const commands = this.getCommands(account);
+            return sum + commands.scheduledCommands.length + commands.pendingCommands.length;
+        }, 0);
         document.getElementById('metric-total').textContent = accounts.length;
         document.getElementById('metric-online').textContent = online;
         document.getElementById('metric-session').textContent = validSessions;
         document.getElementById('metric-command').textContent = commandCount;
+    }
+
+    cacheCommands(account) {
+        if (!account?.id)
+            return;
+        this.commandsByAccount.set(account.id, this.getCommands(account));
+    }
+
+    getCommands(account) {
+        const cached = this.commandsByAccount.get(account.id);
+        return {
+            scheduledCommands: account.scheduledCommands ?? cached?.scheduledCommands ?? [],
+            pendingCommands: account.pendingCommands ?? cached?.pendingCommands ?? [],
+        };
     }
 
     filterAccounts(accounts) {

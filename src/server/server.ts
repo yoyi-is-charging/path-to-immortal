@@ -31,6 +31,29 @@ async function main() {
     const server = createServer(app);
     const wss = new WebSocket.Server({ server });
 
+    const commandSnapshot = (command: any) => ({
+        id: command.id,
+        type: command.type,
+        body: command.body,
+        retries: command.retries,
+        date: command.date,
+    });
+
+    const schedulerSnapshot = (accountId: string) => {
+        const scheduler = InstanceManager.getInstance(accountId)?.scheduler;
+        return {
+            scheduledCommands: scheduler?.scheduledCommands.map(commandSnapshot) ?? [],
+            pendingCommands: scheduler?.pendingCommands.map(commandSnapshot) ?? [],
+        };
+    };
+
+    const accountSnapshot = (account: Account) => ({
+        ...account,
+        ...schedulerSnapshot(account.id),
+    });
+
+    const accountSnapshots = () => AccountManager.getAccounts().map(accountSnapshot);
+
     const bot: Telegraf | undefined = process.env.BOT_TOKEN ? new Telegraf(process.env.BOT_TOKEN) : undefined;
     if (bot) {
         bot.command('start', (ctx) => ctx.reply(`BOT_CHAT_ID: ${ctx.chat.id}`));
@@ -83,12 +106,12 @@ async function main() {
 
 
         const actions: Record<string, (params: any) => Promise<object>> = {
-            getAccounts: async () => AccountManager.getAccounts(),
+            getAccounts: async () => accountSnapshots(),
             getAccount: async ({ accountId }: { accountId: string }) => {
                 const account = AccountManager.getAccount(accountId);
                 if (!account)
                     throw new Error(`Account ${accountId} not found`);
-                return account;
+                return accountSnapshot(account);
             },
             getSchema: async ({ type }: { type: string }) => {
                 const schemas: Record<string, ZodObject<any>> = {
@@ -106,45 +129,45 @@ async function main() {
                     throw new Error(`Instance for account ${accountId} not found`);
                 await instance.updateSession();
                 await instance.init();
-                return instance.account;
+                return accountSnapshot(instance.account);
             },
             patchStatus: async ({ accountId, patch }: { accountId: string, patch: Partial<Status> }) => {
                 const parsedPatch = StatusSchema.parse(patch);
                 await AccountManager.patchStatus(accountId, parsedPatch);
-                return AccountManager.getAccount(accountId);
+                return accountSnapshot(AccountManager.getAccount(accountId));
             },
             patchConfig: async ({ accountId, patch }: { accountId: string, patch: Partial<Config> }) => {
                 const parsedPatch = ConfigSchema.parse(patch);
                 await AccountManager.patchConfig(accountId, parsedPatch);
-                return AccountManager.getAccount(accountId);
+                return accountSnapshot(AccountManager.getAccount(accountId));
             },
             login: async ({ accountId }: { accountId: string }) => {
                 const account = AccountManager.getAccount(accountId);
                 await InstanceManager.createInstance(account);
-                return account;
+                return accountSnapshot(account);
             },
             logout: async ({ accountId }: { accountId: string }) => {
                 const account = AccountManager.getAccount(accountId);
                 await InstanceManager.closeInstance(account);
-                return account;
+                return accountSnapshot(account);
             },
             create: async ({ id, password }: { id: string, password: string | undefined }) => {
                 const newAccount = await AccountManager.createAccount(id, password);
-                return newAccount;
+                return accountSnapshot(newAccount);
             },
             delete: async ({ accountId }: { accountId: string }) => {
                 const account = AccountManager.getAccount(accountId);
                 if (account.online)
                     await InstanceManager.closeInstance(account);
                 await AccountManager.removeAccount(accountId);
-                return account;
+                return accountSnapshot(account);
             },
             clearSession: async ({ accountId }: { accountId: string }) => {
                 const account = AccountManager.getAccount(accountId);
                 if (account.online || InstanceManager.getInstance(accountId))
                     throw new Error(`Account ${accountId} must be offline before clearing session`);
                 await AccountManager.clearSession(accountId);
-                return account;
+                return accountSnapshot(account);
             },
             send: async ({ accountId, command }: { accountId: string, command: string }) => {
                 await InstanceManager.sendCommand(accountId, command);
@@ -156,14 +179,13 @@ async function main() {
             DebugLog.log('ws', 'broadcast', { event, payload });
             ws.send(JSON.stringify({ type: 'broadcast', event, payload }));
         };
-        const broadcastStatus: (account: Account) => void = (account) => broadcast('statusUpdated', account);
+        const broadcastStatus: (account: Account) => void = (account) => broadcast('statusUpdated', accountSnapshot(account));
+        const broadcastConfig: (account: Account) => void = (account) => broadcast('configUpdated', accountSnapshot(account));
         const broadcastQRCode: ({ base64 }: { base64: string }) => void = ({ base64 }) => broadcast('qrcodeUpdated', { base64 });
         const broadcastSessionUpdate: ({ accountId, success }: { accountId: string, success: boolean }) => void = ({ accountId, success }) => broadcast('sessionUpdated', { id: accountId, success });
         const broadcastCommands: ({ accountId, command }: { accountId: string, command: object }) => void = ({ accountId, command }) => {
-            const scheduler = InstanceManager.getInstance(accountId)!.scheduler!;
-            const scheduledCommands = scheduler.scheduledCommands.map(cmd => ({ ...cmd, timeoutId: undefined }));
-            const pendingCommands = scheduler.pendingCommands.map(cmd => ({ ...cmd, timeoutId: undefined }));
-            broadcast('commandsUpdated', { id: accountId, scheduledCommands, pendingCommands });
+            const account = AccountManager.getAccount(accountId);
+            broadcast('commandsUpdated', accountSnapshot(account));
         }
 
         const notify: ({ chatId, message }: { chatId: string, message: string }) => Promise<void> = async ({ chatId, message }) => {
@@ -178,6 +200,7 @@ async function main() {
         }
 
         EventBus.on('statusUpdated', broadcastStatus);
+        EventBus.on('configUpdated', broadcastConfig);
         EventBus.on('commandScheduled', broadcastCommands);
         EventBus.on('commandSent', broadcastCommands);
         EventBus.on('commandProcessed', broadcastCommands);
@@ -187,6 +210,7 @@ async function main() {
 
         ws.on('close', () => {
             EventBus.off('statusUpdated', broadcastStatus);
+            EventBus.off('configUpdated', broadcastConfig);
             EventBus.off('commandScheduled', broadcastCommands);
             EventBus.off('commandSent', broadcastCommands);
             EventBus.off('commandProcessed', broadcastCommands);

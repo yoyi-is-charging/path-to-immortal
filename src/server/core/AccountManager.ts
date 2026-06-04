@@ -114,8 +114,8 @@ export class AccountManager {
         DebugLog.log('account', 'patchStatus.request', DebugLog.statusPatch(accountId, patch));
         const account = this.getAccount(accountId);
         account.status = merge(account.status, patch);
-        EventBus.emit('statusUpdated', account);
         account.metadata.lastUpdateTime = Date.now();
+        EventBus.emit('statusUpdated', account);
         await AccountManager.persist();
         DebugLog.log('account', 'patchStatus.complete', {
             accountId,

@@ -5,9 +5,9 @@ import { logger } from './logger';
 type Jsonish = Record<string, unknown>;
 
 const REDACTED = '[redacted]';
-const STRING_LIMIT = Number(process.env.DEBUG_LOG_STRING_LIMIT ?? 600);
-const ARRAY_LIMIT = Number(process.env.DEBUG_LOG_ARRAY_LIMIT ?? 30);
-const DEPTH_LIMIT = Number(process.env.DEBUG_LOG_DEPTH_LIMIT ?? 6);
+const STRING_LIMIT = Number(process.env.DEBUG_LOG_STRING_LIMIT ?? 180);
+const ARRAY_LIMIT = Number(process.env.DEBUG_LOG_ARRAY_LIMIT ?? 8);
+const DEPTH_LIMIT = Number(process.env.DEBUG_LOG_DEPTH_LIMIT ?? 4);
 
 const SENSITIVE_KEY_PATTERN = /(password|encryptedPassword|token|secret|authorization|cookie|session|base64|qrcode|bytes_pb_reserve|x-turing-signature|x-oidb)/i;
 
@@ -67,9 +67,6 @@ export class DebugLog {
             retries: command.retries ?? 0,
             date: command.date instanceof Date ? command.date.toISOString() : command.date,
             body: this.messageBody(command.body),
-            hasTimeout: Boolean(command.timeoutId),
-            hasResolver: Boolean(command.resolve),
-            hasRejecter: Boolean(command.reject),
         };
     }
 
