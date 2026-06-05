@@ -21,10 +21,12 @@ class AccountsDashboard {
         this.detailContent = document.getElementById('detail-dialog-content');
 
         document.getElementById('add-account').addEventListener('click', () => document.getElementById('add-account-dialog').show());
+        document.getElementById('guide-button').addEventListener('click', () => document.getElementById('guide-dialog').show());
         document.getElementById('refresh-accounts').addEventListener('click', () => this.loadAccounts());
         document.getElementById('add-account-form').addEventListener('submit', event => this.handleAddAccount(event));
         document.getElementById('cancel-add-account').addEventListener('click', () => document.getElementById('add-account-dialog').close());
         document.getElementById('close-qr-dialog').addEventListener('click', () => document.getElementById('qr-code-dialog').close());
+        document.getElementById('close-guide-dialog').addEventListener('click', () => document.getElementById('guide-dialog').close());
         this.detailDialog.addEventListener('close', () => this.detailState = null);
         this.detailDialog.addEventListener('closed', () => this.detailState = null);
         this.detailContent.addEventListener('change', event => this.handleDetailFieldUpdate(event).catch(error => this.showToast(error.message, true)));
@@ -125,14 +127,8 @@ class AccountsDashboard {
                         <span>启用项目</span>
                         <strong>${enabledCount}</strong>
                     </div>
-                    <div class="detail">
-                        <span>待执行</span>
-                        <strong>${commands.scheduledCommands.length}</strong>
-                    </div>
-                    <div class="detail">
-                        <span>等待响应</span>
-                        <strong>${commands.pendingCommands.length}</strong>
-                    </div>
+                    ${this.renderCommandDetail('待执行', commands.scheduledCommands, '等待到点发送')}
+                    ${this.renderCommandDetail('等待响应', commands.pendingCommands, '已发送，等待游戏回复')}
                 </div>
 
                 ${this.renderActivityPanel(account.id, activityItems)}
@@ -434,6 +430,49 @@ class AccountsDashboard {
         return Object.entries(account.config || {})
             .filter(([, value]) => value && typeof value === 'object' && value.enabled === true)
             .length;
+    }
+
+    renderCommandDetail(label, commands, emptyText) {
+        return `
+            <details class="detail command-detail">
+                <summary class="command-summary">
+                    <span>${this.escapeHtml(label)}</span>
+                    <strong>${commands.length}</strong>
+                </summary>
+                <div class="command-popover" role="list" aria-label="${this.escapeAttr(label)}命令">
+                    ${commands.length
+                        ? commands.map(command => this.renderCommandItem(command)).join('')
+                        : `<div class="command-empty">${this.escapeHtml(emptyText)}</div>`}
+                </div>
+            </details>
+        `;
+    }
+
+    renderCommandItem(command) {
+        const body = this.formatCommandBody(command.body);
+        const dateText = command.date ? this.formatDate(command.date) : '';
+        return `
+            <div class="command-item" role="listitem">
+                <div class="command-item-header">
+                    <span class="command-type">${this.escapeHtml(command.type || '未知命令')}</span>
+                    ${command.retries ? `<span class="command-retry">重试 ${this.escapeHtml(command.retries)}</span>` : ''}
+                </div>
+                ${body ? `<div class="command-body">${this.escapeHtml(body)}</div>` : ''}
+                ${dateText ? `<div class="command-time">${this.escapeHtml(dateText)}</div>` : ''}
+            </div>
+        `;
+    }
+
+    formatCommandBody(body) {
+        if (typeof body === 'string')
+            return body;
+        if (Array.isArray(body))
+            return body.map(item => item?.str ?? '').filter(Boolean).join(' ');
+        if (typeof body === 'function')
+            return '动态命令内容';
+        if (body && typeof body === 'object')
+            return JSON.stringify(body);
+        return '';
     }
 
     renderActivityPanel(accountId, items) {
